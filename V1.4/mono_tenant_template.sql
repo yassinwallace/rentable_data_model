@@ -455,17 +455,6 @@ CREATE TABLE "booking_disputes" (
 "updated_at" TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
 );
 
-CREATE TABLE "booking_reviews" (
-"id" UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-"booking_id" UUID NOT NULL,
-"reviewer_id" UUID NOT NULL,
-"reviewee_id" UUID NOT NULL,
-"rating" INTEGER NOT NULL,
-"review" TEXT,
-"created_at" TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-"updated_at" TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
 CREATE TABLE "booking_cancellations" (
 "id" UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 "booking_id" UUID NOT NULL,
@@ -1349,9 +1338,6 @@ ALTER TABLE booking_status_history ADD FOREIGN KEY (booking_id) REFERENCES booki
 ALTER TABLE booking_status_history ADD FOREIGN KEY (changed_by) REFERENCES users (id);
 ALTER TABLE booking_disputes ADD FOREIGN KEY (booking_id) REFERENCES bookings (id);
 ALTER TABLE booking_disputes ADD FOREIGN KEY (reported_by) REFERENCES users (id);
-ALTER TABLE booking_reviews ADD FOREIGN KEY (booking_id) REFERENCES bookings (id);
-ALTER TABLE booking_reviews ADD FOREIGN KEY (reviewer_id) REFERENCES users (id);
-ALTER TABLE booking_reviews ADD FOREIGN KEY (reviewee_id) REFERENCES users (id);
 ALTER TABLE booking_cancellations ADD FOREIGN KEY (booking_id) REFERENCES bookings (id);
 ALTER TABLE booking_cancellations ADD FOREIGN KEY (cancelled_by) REFERENCES users (id);
 ALTER TABLE security_deposits ADD FOREIGN KEY (booking_id) REFERENCES bookings (id);
