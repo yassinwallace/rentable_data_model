@@ -1,7 +1,14 @@
-CREATE TYPE user_type AS ENUM('individual','business');
+-- ==========================================
+-- Rentable Database Schema Template
+-- ==========================================
+-- This file has been modularized. User Management tables have been moved to 01_user_management_module.sql
+-- ==========================================
+
+-- ==========================================
+-- ENUM Types (Business Management and other modules)
+-- ==========================================
+-- User Management ENUMs have been moved to 01_user_management_module.sql
 CREATE TYPE business_verification_status AS ENUM('pending','verified','rejected');
-CREATE TYPE user_verification_type AS ENUM('email','phone','government_id');
-CREATE TYPE user_verification_status AS ENUM('pending','approved','rejected');
 CREATE TYPE item_owner_type AS ENUM('user','business');
 CREATE TYPE item_status AS ENUM('active','inactive','pending_review');
 CREATE TYPE item_condition AS ENUM('new','like_new','good','fair','poor');
@@ -63,34 +70,10 @@ CREATE TYPE third_party_vendor_compliance_status AS ENUM('compliant','non_compli
 -- Removed: CREATE TYPE locationable_type AS ENUM('user','business','item');
 -- Removed: CREATE TYPE address_type AS ENUM('home','business','warehouse','item_collection','other');
 
-CREATE TABLE "user" (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-username varchar UNIQUE NOT NULL,
-email varchar UNIQUE NOT NULL,
-password_hash varchar NOT NULL,
-user_type user_type NOT NULL,
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-updated_at timestamp
-);
-
-CREATE TABLE user_profile (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-user_id UUID NOT NULL,
-first_name VARCHAR(100) NOT NULL,
-last_name VARCHAR(100) NOT NULL,
-bio TEXT,
-avatar_url VARCHAR(255),
-date_of_birth DATE,
-gender VARCHAR(50),
-occupation VARCHAR(100),
-phone_number VARCHAR(20),
-preferences JSONB,
-preferred_language VARCHAR(10),
-additional_languages TEXT[],  -- Changed from JSON to text[]
-is_verified BOOLEAN DEFAULT false,
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
+-- ==========================================
+-- Tables (Business Management)
+-- ==========================================
+-- User Management tables have been moved to 01_user_management_module.sql
 
 CREATE TABLE business (
 id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -123,85 +106,6 @@ updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
 
 -- Removed: CREATE TABLE location (...)
 -- Removed: CREATE TABLE item_location_assignment (...)
-
-CREATE TABLE user_verification (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-user_id UUID,
-user_verification_type user_verification_type NOT NULL,
-user_verification_status user_verification_status NOT NULL,
-verification_data JSONB,
-document_type VARCHAR(50),
-document_number VARCHAR(100),
-verified_at TIMESTAMP,
-expires_at TIMESTAMP,
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
-CREATE TABLE role (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-name VARCHAR(50) UNIQUE NOT NULL,
-description TEXT,
-is_active BOOLEAN DEFAULT true,
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
-CREATE TABLE permission (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-name VARCHAR(100) UNIQUE NOT NULL,
-description TEXT,
-category VARCHAR(50) NOT NULL,
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
-CREATE TABLE role_permission (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-role_id UUID,
-permission_id UUID,
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
-CREATE TABLE user_session (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-session_id VARCHAR(255),
-token VARCHAR(255) UNIQUE,
-user_id UUID,
-roles TEXT[],  -- PostgreSQL array for storing roles
-ip_address VARCHAR(45) NOT NULL,
-user_agent TEXT,
-expires_at TIMESTAMP NOT NULL,
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
-CREATE TABLE password_reset_token (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-user_id UUID,
-token VARCHAR(255) UNIQUE NOT NULL,
-expires_at TIMESTAMP NOT NULL,
-is_used BOOLEAN DEFAULT false,
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
-CREATE TABLE user_activity_log (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-user_id UUID,
-activity_type VARCHAR(50) NOT NULL,
-details JSONB,
-ip_address VARCHAR(45),
-created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
-CREATE TABLE user_business_roles_assignment (
-id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-user_id UUID,
-business_profile_id UUID,
-role_id UUID,
-assigned_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-assigned_by UUID
-);
 
 CREATE TABLE item (
 id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -1258,31 +1162,26 @@ created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
 updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
 );
 
-CREATE UNIQUE INDEX ON "user" (email, username);
-CREATE INDEX user_created_at_index ON "user" (created_at);
-CREATE UNIQUE INDEX ON user_profile (user_id, phone_number);
-CREATE INDEX ON user_profile (first_name, last_name);
+-- ==========================================
+-- Indexes
+-- ==========================================
+-- User Management indexes have been moved to 01_user_management_module.sql
 CREATE INDEX ON business (business_name);
 CREATE UNIQUE INDEX ON business (registration_number, tax_id);
 CREATE UNIQUE INDEX ON business_profile (business_id);
 CREATE INDEX ON business_profile (founded_year);
-ALTER TABLE user_profile ADD FOREIGN KEY (user_id) REFERENCES "user" (id);
+
+-- ==========================================
+-- Foreign Keys
+-- ==========================================
+-- User Management foreign keys have been moved to 01_user_management_module.sql
 ALTER TABLE business_profile ADD FOREIGN KEY (business_id) REFERENCES business (id);
 ALTER TABLE user_business_assignment ADD FOREIGN KEY (user_id) REFERENCES "user" (id);
 ALTER TABLE user_business_assignment ADD FOREIGN KEY (business_id) REFERENCES business (id);
-ALTER TABLE user_verification ADD FOREIGN KEY (user_id) REFERENCES "user" (id);
-ALTER TABLE role_permission ADD FOREIGN KEY (role_id) REFERENCES role (id);
-ALTER TABLE role_permission ADD FOREIGN KEY (permission_id) REFERENCES permission (id);
-ALTER TABLE user_session ADD FOREIGN KEY (user_id) REFERENCES "user" (id);
-ALTER TABLE password_reset_token ADD FOREIGN KEY (user_id) REFERENCES "user" (id);
-ALTER TABLE user_activity_log ADD FOREIGN KEY (user_id) REFERENCES "user" (id);
-ALTER TABLE user_business_roles_assignment  ADD FOREIGN KEY (user_id) REFERENCES "user" (id);
-ALTER TABLE user_business_roles_assignment  ADD FOREIGN KEY (business_profile_id) REFERENCES business_profile (id);
-ALTER TABLE user_business_roles_assignment  ADD FOREIGN KEY (role_id) REFERENCES role (id);
-ALTER TABLE user_business_roles_assignment  ADD FOREIGN KEY (assigned_by) REFERENCES "user" (id);
-ALTER TABLE item_category  ADD FOREIGN KEY (parent_id) REFERENCES item_category (id);
-ALTER TABLE item_category_assignment  ADD FOREIGN KEY (item_id) REFERENCES item (id);
-ALTER TABLE item_category_assignment  ADD FOREIGN KEY (category_id) REFERENCES item_category (id);
+ALTER TABLE user_business_roles_assignment ADD FOREIGN KEY (business_profile_id) REFERENCES business_profile (id);
+ALTER TABLE item_category ADD FOREIGN KEY (parent_id) REFERENCES item_category (id);
+ALTER TABLE item_category_assignment ADD FOREIGN KEY (item_id) REFERENCES item (id);
+ALTER TABLE item_category_assignment ADD FOREIGN KEY (category_id) REFERENCES item_category (id);
 ALTER TABLE item_attributes ADD FOREIGN KEY (item_id) REFERENCES item (id);
 ALTER TABLE item_availability ADD FOREIGN KEY (item_id) REFERENCES item (id);
 ALTER TABLE item_images ADD FOREIGN KEY (item_id) REFERENCES item (id);
