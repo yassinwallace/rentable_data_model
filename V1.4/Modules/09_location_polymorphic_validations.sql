@@ -1,6 +1,23 @@
--- location_polymorphic_validations.sql
+-- ==========================================
+-- Location Polymorphic Validations (Step 09)
+-- ==========================================
 -- Validation and cascade logic for polymorphic relationships in the location module
 -- This file should be executed after the location module tables are created
+--
+-- Created: 2025-04-16
+-- ==========================================
+
+-- ==========================================
+-- Prerequisites
+-- ==========================================
+-- Requires prior deployment of:
+-- - 01_01_user_management_module.sql
+-- - 02_02_business_management_module.sql
+-- - 04_03_item_management_module.sql
+-- - 07_04_location_management_module.sql
+-- - 08_cross_module_fk.sql
+--
+-- Deployment order: 09 (ninth deployment step)
 
 -- ==========================================
 -- VALIDATION FUNCTION

@@ -1,5 +1,5 @@
 -- ==========================================
--- User Management Module (01)
+-- User Management Module (STEP 01)
 -- ==========================================
 -- This file contains all database objects related to User Management:
 -- - Tables: user, user_profile, user_verification, role, permission, etc.
@@ -8,6 +8,13 @@
 -- 
 -- Created: 2025-04-16
 -- ==========================================
+
+-- ==========================================
+-- Prerequisites
+-- ==========================================
+-- This is a base module with no prerequisites.
+-- Deployment order: 01 (first deployment step)
+-- Module number: 01 (User Management)
 
 -- ==========================================
 -- ENUM Types
@@ -150,16 +157,6 @@ CREATE TABLE user_reputation_score (
     updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
 );
 
-CREATE TABLE user_segment (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    criteria JSONB NOT NULL,
-    created_by UUID,
-    created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),
-    updated_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP)
-);
-
 CREATE TABLE blocked_user (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     blocked_by UUID NOT NULL,
@@ -176,6 +173,8 @@ CREATE UNIQUE INDEX ON "user" (email, username);
 CREATE INDEX user_created_at_index ON "user" (created_at);
 CREATE UNIQUE INDEX ON user_profile (user_id, phone_number);
 CREATE INDEX ON user_profile (first_name, last_name);
+CREATE INDEX ON blocked_user (blocked_by);
+CREATE INDEX ON blocked_user (blocked_user);
 
 -- ==========================================
 -- Foreign Keys (Internal to User Management)
@@ -197,4 +196,4 @@ ALTER TABLE blocked_user ADD FOREIGN KEY (blocked_by) REFERENCES "user" (id);
 ALTER TABLE blocked_user ADD FOREIGN KEY (blocked_user) REFERENCES "user" (id);
 
 -- Note: Foreign keys that reference tables in other modules (or are referenced by other modules)
--- remain in the main schema file (mono_tenant_template.sql)
+-- remain in cross-module foreign key files
