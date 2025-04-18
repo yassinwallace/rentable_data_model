@@ -1,0 +1,88 @@
+
+Enum order_status {
+  pending
+  confirmed
+  in_progress
+  completed
+  cancelled
+  disputed
+}
+
+Enum order_event_type {
+  cancellation_requested
+  cancellation_approved
+  cancellation_rejected
+  extension_requested
+  extension_approved
+  extension_rejected
+  dispute_raised
+  dispute_resolved
+  status_changed
+  message_sent
+  custom_note
+}
+
+Enum approval_status {
+  pending
+  approved
+  rejected
+  auto_approved
+  n/a
+}
+
+Table "order" {
+  id uuid [pk, default: `gen_random_uuid()`]
+  ordered_by_profile_id uuid [not null]
+  owner_profile_id uuid [not null]
+  item_id uuid [not null]
+  status order_status [default: 'pending']
+  start_time timestamp [not null]
+  end_time timestamp [not null]
+  total_price numeric(10, 2)
+  currency varchar(10)
+  note text
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  note: "Main order table: tracks high-level info and current status"
+}
+
+Table order_event {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  event_type order_event_type [not null]
+  initiated_by_profile_id uuid [not null]
+  approved_by_profile_id uuid
+  approval_status approval_status [default: 'n/a']
+  payload jsonb
+  created_at timestamp [default: `now()`]
+  effective_at timestamp
+
+  note: "Unified stream of all events related to the order lifecycle"
+}
+
+Table item_handover {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  handover_time timestamp
+  expected_return_time timestamp
+  actual_return_time timestamp
+  handed_over_by_profile_id uuid [not null]
+  received_by_profile_id uuid
+  condition_report text
+  created_at timestamp [default: `now()`]
+
+  note: "Captures the physical exchange of an item (handover and return)"
+}
+
+Ref: "order".ordered_by_profile_id > profile.id
+Ref: "order".owner_profile_id > profile.id
+Ref: "order".item_id > item.id
+
+Ref: order_event.order_id > "order".id
+Ref: order_event.initiated_by_profile_id > profile.id
+Ref: order_event.approved_by_profile_id > profile.id
+
+Ref: item_handover.order_id > "order".id
+Ref: item_handover.handed_over_by_profile_id > profile.id
+Ref: item_handover.received_by_profile_id > profile.id

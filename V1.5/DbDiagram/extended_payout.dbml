@@ -1,0 +1,17 @@
+
+Table payout {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  recipient_profile_id uuid [not null]
+  status payout_status [default: 'pending']
+  amount numeric(10, 2)
+  currency varchar(10)
+  scheduled_at timestamp
+  paid_at timestamp
+  eligible_at timestamp  -- when payout becomes eligible
+  hold_reason text       -- reason for delay or manual review
+  is_on_hold boolean [default: false] -- temporary hold flag
+  created_at timestamp [default: `now()`]
+
+  note: "Amount paid out to the item owner after fees. Can be delayed for confirmation, disputes, etc."
+}

@@ -1,0 +1,96 @@
+
+Enum payment_status {
+  pending
+  succeeded
+  failed
+  refunded
+  partially_refunded
+}
+
+Enum payout_status {
+  pending
+  completed
+  failed
+  cancelled
+}
+
+Enum invoice_status {
+  draft
+  issued
+  paid
+  overdue
+  cancelled
+}
+
+Table invoice {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  status invoice_status [default: 'draft']
+  issued_at timestamp
+  due_date timestamp
+  total_amount numeric(10, 2)
+  currency varchar(10)
+  created_at timestamp [default: `now()`]
+
+  note: "Invoice linked to an order. May include fees, taxes, etc."
+}
+
+Table payment {
+  id uuid [pk, default: `gen_random_uuid()`]
+  invoice_id uuid [not null]
+  paid_by_profile_id uuid [not null]
+  status payment_status [default: 'pending']
+  amount numeric(10, 2)
+  currency varchar(10)
+  payment_method_id uuid
+  created_at timestamp [default: `now()`]
+
+  note: "Records payment attempts toward an invoice."
+}
+
+Table payout {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  recipient_profile_id uuid [not null]
+  status payout_status [default: 'pending']
+  amount numeric(10, 2)
+  currency varchar(10)
+  scheduled_at timestamp
+  paid_at timestamp
+  created_at timestamp [default: `now()`]
+
+  note: "Amount paid out to the item owner after fees, post-payment."
+}
+
+Table refund {
+  id uuid [pk, default: `gen_random_uuid()`]
+  payment_id uuid [not null]
+  refunded_by_profile_id uuid
+  amount numeric(10, 2)
+  reason text
+  created_at timestamp [default: `now()`]
+
+  note: "Refund linked to a payment."
+}
+
+Table payment_method {
+  id uuid [pk, default: `gen_random_uuid()`]
+  profile_id uuid [not null]
+  method_type varchar(50)  -- e.g. 'card', 'paypal'
+  provider_id varchar(100) -- Stripe/PayPal token
+  last4 varchar(4)
+  is_default boolean [default: false]
+  created_at timestamp [default: `now()`]
+
+  note: "Saved payment method for a profile."
+}
+
+Ref: invoice.order_id > "order".id
+Ref: payment.invoice_id > invoice.id
+Ref: payment.paid_by_profile_id > profile.id
+Ref: payout.order_id > "order".id
+Ref: payout.recipient_profile_id > profile.id
+Ref: refund.payment_id > payment.id
+Ref: refund.refunded_by_profile_id > profile.id
+Ref: payment.payment_method_id > payment_method.id
+Ref: payment_method.profile_id > profile.id

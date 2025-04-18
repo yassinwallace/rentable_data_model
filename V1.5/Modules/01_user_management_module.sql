@@ -3,6 +3,11 @@
 CREATE TYPE profile_type AS ENUM ('individual', 'organization');
 CREATE TYPE invitation_status AS ENUM ('pending', 'accepted', 'expired');
 
+
+CREATE TABLE user_ref (
+    user_id UUID PRIMARY KEY
+    
+);
 -- Tables
 CREATE TABLE profile (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -16,11 +21,6 @@ CREATE TABLE profile (
     phone_number VARCHAR,
     avatar_url VARCHAR,
     created_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE user_ref (
-    user_id UUID PRIMARY KEY
-    
 );
 
 CREATE TABLE organization_invitation (

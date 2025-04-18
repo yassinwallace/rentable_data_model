@@ -1,0 +1,36 @@
+
+Table tenant_settings {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  key text [not null]
+  value text [not null]
+  created_at timestamp [default: `now()`]
+
+  note: "Global platform/tenant-level key-value store for settings like grace period."
+}
+
+Table item_rental_rules {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_id uuid [not null]
+  grace_period_minutes int
+  max_duration_hours int
+  min_duration_hours int
+  requires_verification boolean
+  created_at timestamp [default: `now()`]
+
+  note: "Rules for individual items including grace periods and constraints."
+}
+
+Table organization_policy {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_profile_id uuid [not null]
+  grace_period_minutes int
+  cancellation_policy text
+  max_late_tolerance_minutes int
+  created_at timestamp [default: `now()`]
+
+  note: "Optional organization-wide rules overriding global or item rules."
+}
+
+Ref: item_rental_rules.item_id > item.id
+Ref: organization_policy.organization_profile_id > profile.id

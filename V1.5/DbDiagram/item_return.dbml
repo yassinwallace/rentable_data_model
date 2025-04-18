@@ -1,0 +1,19 @@
+
+Table item_return {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  actual_return_time timestamp [not null]
+  returned_by_profile_id uuid [not null]
+  confirmed_by_profile_id uuid
+  condition_report text
+  is_late boolean [default: false]
+  late_by_minutes integer
+  grace_period_exceeded boolean [default: false]
+  created_at timestamp [default: `now()`]
+
+  note: "Logs actual item return details. Complements item_handover. Used to flag late returns."
+}
+
+Ref: item_return.order_id > "order".id
+Ref: item_return.returned_by_profile_id > profile.id
+Ref: item_return.confirmed_by_profile_id > profile.id
