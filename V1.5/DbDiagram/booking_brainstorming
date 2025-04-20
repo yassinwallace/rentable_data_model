@@ -1,0 +1,271 @@
+Table "profile" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "user_id" UUID [not null]
+  "profile_type" profile_type [not null]
+  "first_name" VARCHAR
+  "last_name" VARCHAR
+  "date_of_birth" DATE
+  "organization_name" VARCHAR
+  "siret_number" VARCHAR
+  "phone_number" VARCHAR
+  "avatar_url" VARCHAR
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    user_id [name: "idx_profile_user_id"]
+  }
+}
+
+
+
+Table "item" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "owner_profile_id" UUID [not null]
+  "title" VARCHAR(255) [not null]
+  "description" TEXT [not null]
+  "base_price" DECIMAL(10,2) [not null]
+  "currency" "CHAR (3)" [not null]
+  "item_status" item_status [not null]
+  "item_condition" item_condition [not null]
+  "item_type" item_type [not null]
+  "quantity" INT [default: 1]
+  "minimum_rental_period" INT
+  "maximum_rental_period" INT
+  "start_hours" VARCHAR(50)
+  "end_hours" VARCHAR(50)
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    owner_profile_id [name: "idx_item_owner"]
+  }
+}
+
+Ref:"profile"."id" < "item"."owner_profile_id"
+
+
+
+
+
+
+Enum order_status {
+  pending
+  confirmed
+  in_progress
+  completed
+  cancelled
+  disputed
+}
+
+Enum order_event_type {
+  cancellation_requested
+  cancellation_approved
+  cancellation_rejected
+  extension_requested
+  extension_approved
+  extension_rejected
+  dispute_raised
+  dispute_resolved
+  status_changed
+  message_sent
+  custom_note
+}
+
+Enum approval_status {
+  pending
+  approved
+  rejected
+  auto_approved
+}
+
+Table "order" {
+  id uuid [pk, default: `gen_random_uuid()`]
+  ordered_by_profile_id uuid [not null]
+  owner_profile_id uuid [not null]
+  item_id uuid [not null]
+  status order_status [default: 'pending']
+  start_time timestamp [not null]
+  end_time timestamp [not null]
+  total_price numeric(10, 2)
+  currency varchar(10)
+  note text
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  note: "Main order table: tracks high-level info and current status"
+}
+
+Table order_event {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  event_type order_event_type [not null]
+  initiated_by_profile_id uuid [not null]
+  approved_by_profile_id uuid
+  approval_status approval_status [default: 'n/a']
+  payload jsonb
+  created_at timestamp [default: `now()`]
+  effective_at timestamp
+
+  note: "Unified stream of all events related to the order lifecycle"
+}
+
+Table item_handover {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  handover_time timestamp
+  expected_return_time timestamp
+  actual_return_time timestamp
+  handed_over_by_profile_id uuid [not null]
+  received_by_profile_id uuid
+  condition_report text
+  created_at timestamp [default: `now()`]
+
+  note: "Captures the physical exchange of an item (handover and return)"
+}
+
+
+Table item_return {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  actual_return_time timestamp [not null]
+  returned_by_profile_id uuid [not null]
+  confirmed_by_profile_id uuid
+  condition_report text
+  is_late boolean [default: false]
+  late_by_minutes integer
+  grace_period_exceeded boolean [default: false]
+  created_at timestamp [default: `now()`]
+
+  note: "Logs actual item return details. Complements item_handover. Used to flag late returns."
+}
+
+Ref: item_return.order_id > "order".id
+Ref: item_return.returned_by_profile_id > profile.id
+Ref: item_return.confirmed_by_profile_id > profile.id
+
+
+
+
+
+
+
+
+
+
+
+Ref: "order".ordered_by_profile_id > profile.id
+Ref: "order".owner_profile_id > profile.id
+Ref: "order".item_id > item.id
+
+Ref: order_event.order_id > "order".id
+Ref: order_event.initiated_by_profile_id > profile.id
+Ref: order_event.approved_by_profile_id > profile.id
+
+Ref: item_handover.order_id > "order".id
+Ref: item_handover.handed_over_by_profile_id > profile.id
+Ref: item_handover.received_by_profile_id > profile.id
+
+
+
+
+
+Enum payment_status {
+  pending
+  succeeded
+  failed
+  refunded
+  partially_refunded
+}
+
+Enum payout_status {
+  pending
+  completed
+  failed
+  cancelled
+}
+
+Enum invoice_status {
+  draft
+  issued
+  paid
+  overdue
+  cancelled
+}
+
+Table invoice {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  status invoice_status [default: 'draft']
+  issued_at timestamp
+  due_date timestamp
+  total_amount numeric(10, 2)
+  currency varchar(10)
+  created_at timestamp [default: `now()`]
+
+  note: "Invoice linked to an order. May include fees, taxes, etc."
+}
+
+Table payment {
+  id uuid [pk, default: `gen_random_uuid()`]
+  invoice_id uuid [not null]
+  paid_by_profile_id uuid [not null]
+  status payment_status [default: 'pending']
+  amount numeric(10, 2)
+  currency varchar(10)
+  payment_method_id uuid
+  created_at timestamp [default: `now()`]
+
+  note: "Records payment attempts toward an invoice."
+}
+
+
+Table payout {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  recipient_profile_id uuid [not null]
+  status payout_status [default: 'pending']
+  amount numeric(10, 2)
+  currency varchar(10)
+  scheduled_at timestamp
+  paid_at timestamp
+  eligible_at timestamp  // when payout becomes eligible
+  hold_reason text       // reason for delay or manual review
+  is_on_hold boolean [default: false] // temporary hold flag
+  created_at timestamp [default: `now()`]
+
+  note: "Amount paid out to the item owner after fees. Can be delayed for confirmation, disputes, etc."
+}
+
+
+Table refund {
+  id uuid [pk, default: `gen_random_uuid()`]
+  payment_id uuid [not null]
+  refunded_by_profile_id uuid
+  amount numeric(10, 2)
+  reason text
+  created_at timestamp [default: `now()`]
+
+  note: "Refund linked to a payment."
+}
+
+Table payment_method {
+  id uuid [pk, default: `gen_random_uuid()`]
+  profile_id uuid [not null]
+  method_type varchar(50)  // e.g. 'card', 'paypal'
+  provider_id varchar(100) // Stripe/PayPal token
+  last4 varchar(4)
+  is_default boolean [default: false]
+  created_at timestamp [default: `now()`]
+
+  note: "Saved payment method for a profile."
+}
+
+Ref: invoice.order_id > "order".id
+Ref: payment.invoice_id > invoice.id
+Ref: payment.paid_by_profile_id > profile.id
+Ref: payout.order_id > "order".id
+Ref: payout.recipient_profile_id > profile.id
+Ref: refund.payment_id > payment.id
+Ref: refund.refunded_by_profile_id > profile.id
+Ref: payment.payment_method_id > payment_method.id
+Ref: payment_method.profile_id > profile.id
