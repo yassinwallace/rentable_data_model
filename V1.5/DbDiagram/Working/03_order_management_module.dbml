@@ -1,0 +1,390 @@
+Table "profile" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "user_id" UUID [not null]
+  "profile_type" profile_type [not null]
+  "first_name" VARCHAR
+  "last_name" VARCHAR
+  "date_of_birth" DATE
+  "organization_name" VARCHAR
+  "siret_number" VARCHAR
+  "phone_number" VARCHAR
+  "avatar_url" VARCHAR
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    user_id [name: "idx_profile_user_id"]
+  }
+}
+
+
+
+Table "item" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "owner_profile_id" UUID [not null]
+  "title" VARCHAR(255) [not null]
+  "description" TEXT [not null]
+  "base_price" DECIMAL(10,2) [not null]
+  "currency" CHAR(3) [not null]
+  "item_status" item_status [not null]
+  "item_condition" item_condition [null]
+  "item_type" item_type [not null]
+  "minimum_rental_period" INT
+  "maximum_rental_period" INT
+  "start_hours" VARCHAR(50)
+  "end_hours" VARCHAR(50)
+  "required_certification" certification_type [null]
+  "logistics_mode" logistics_mode [default: 'none']
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    owner_profile_id [name: "idx_item_owner"]
+  }
+
+  Note: "Main catalog listing. Units tracked via item_unit."
+}
+
+
+
+Ref:"profile"."id" < "item"."owner_profile_id"
+
+Table item_unit {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_id uuid [ref: > item.id, not null]
+  serial_number varchar [null]
+  internal_reference varchar [null]
+  item_condition item_condition
+  is_active boolean [default: true]
+  current_location_id uuid [null]
+  created_at timestamp [default: `now()`]
+
+  note: "Represents a physical instance of a parent item"
+}
+
+
+
+
+//------------FROM HERE------------------
+
+
+
+Enum order_status {
+  pending
+  confirmed
+  in_progress
+  completed
+  cancelled
+  disputed
+}
+
+Enum order_event_type {
+  cancellation_requested
+  cancellation_approved
+  cancellation_rejected
+  extension_requested
+  extension_approved
+  extension_rejected
+  dispute_raised
+  dispute_resolved
+  status_changed
+  message_sent
+  custom_note
+}
+
+Enum approval_status {
+  pending
+  approved
+  rejected
+  auto_approved
+}
+
+Table "order" {
+  id uuid [pk, default: `gen_random_uuid()`]
+  ordered_by_profile_id uuid [not null]
+  owner_profile_id uuid [not null]
+  item_id uuid [not null]
+  status order_status [default: 'pending']
+  start_time timestamp [not null]
+  end_time timestamp [not null]
+  total_price numeric(10, 2)
+  currency varchar(10)
+  note text
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  note: "Main order table: tracks high-level info and current status"
+}
+
+Table order_event {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  event_type order_event_type [not null]
+  initiated_by_profile_id uuid [not null]
+  approved_by_profile_id uuid
+  approval_status approval_status [default: 'n/a']
+  payload jsonb
+  created_at timestamp [default: `now()`]
+  effective_at timestamp
+
+  note: "Unified stream of all events related to the order lifecycle"
+}
+
+
+
+
+// Handover Type Enum
+Enum handover_type {
+  OUTGOING
+  RETURN
+}
+
+Table item_handover {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  handover_time timestamp
+  type handover_type
+  expected_return_time timestamp
+  actual_return_time timestamp
+  received_by_profile_id uuid
+  handed_over_by_profile_id uuid [not null]
+  checked_by_profile_id uuid [ref: > profile.id]
+  condition_report text
+  photos_urls text[] [null]
+  created_at timestamp [default: `now()`]
+
+  note: "Captures the physical exchange of an item (handover and return)"
+}
+
+
+Table item_return {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  actual_return_time timestamp [not null]
+  returned_by_profile_id uuid [not null]
+  confirmed_by_profile_id uuid
+  condition_report text
+  is_late boolean [default: false]
+  late_by_minutes integer
+  grace_period_exceeded boolean [default: false]
+  created_at timestamp [default: `now()`]
+
+  note: "Logs actual item return details. Complements item_handover. Used to flag late returns."
+}
+
+Ref: item_return.order_id > "order".id
+Ref: item_return.returned_by_profile_id > profile.id
+Ref: item_return.confirmed_by_profile_id > profile.id
+
+
+
+Ref: "order".ordered_by_profile_id > profile.id
+Ref: "order".owner_profile_id > profile.id
+Ref: "order".item_id > item.id
+
+Ref: order_event.order_id > "order".id
+Ref: order_event.initiated_by_profile_id > profile.id
+Ref: order_event.approved_by_profile_id > profile.id
+
+Ref: item_handover.order_id > "order".id
+Ref: item_handover.handed_over_by_profile_id > profile.id
+Ref: item_handover.received_by_profile_id > profile.id
+
+
+
+// Payment Type Enum
+Enum payment_type {
+  RENT
+  DEPOSIT
+  EXTRA
+}
+
+// Payment Status Enum
+Enum payment_status {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// Deposit Status Enum
+Enum deposit_status {
+  HELD
+  RELEASED
+  CLAIMED
+}
+
+// Order Payment Table
+Table order_payment {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [ref: > order.id, not null]
+  profile_id uuid [ref: > profile.id, not null]
+  amount numeric(10, 2) [not null]
+  payment_type payment_type [not null]
+  status payment_status [default: 'PENDING']
+  paid_at timestamp [null]
+  external_ref text [null]
+  created_at timestamp [default: `now()`]
+
+  note: "Handles all financial transactions tied to an order"
+}
+
+// Order Deposit Table
+Table order_deposit {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [ref: > order.id, not null, unique]
+  order_payment_id uuid [ref: > order_payment.id, not null, unique]
+  amount numeric(10, 2) [not null] // total held
+  status deposit_status [default: 'HELD']
+  created_at timestamp [default: `now()`]
+
+  note: "Represents the held deposit; detailed actions tracked separately"
+}
+
+
+
+Table order_dispute {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [ref: > order.id, not null, unique]
+  raised_by_profile_id uuid [ref: > profile.id, not null]
+  reason text
+  status dispute_status [default: 'OPEN']
+  resolution text [null]
+  created_at timestamp [default: `now()`]
+}
+
+Enum dispute_status {
+  OPEN
+  RESOLVED
+  ESCALATED
+}
+
+
+Table order_deposit_action {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_deposit_id uuid [ref: > order_deposit.id, not null]
+  action_type deposit_action_type [not null] // CLAIM or RELEASE
+  amount numeric(10,2) [not null]
+  reason text [null]
+  initiated_by_profile_id uuid [ref: > profile.id]
+  approved_by_profile_id uuid [ref: > profile.id, null]
+  created_at timestamp [default: `now()`]
+
+  note: "Tracks all actions against a deposit (claims and releases)"
+}
+
+Enum deposit_action_type {
+  CLAIM
+  RELEASE
+}
+
+
+
+
+
+Table order_operator_assignment {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [ref: > order.id, not null]
+  profile_id uuid [ref: > profile.id, null] // optional
+  full_name varchar [null]
+  phone_number varchar [null]
+  certification_type certification_type [null]
+  certification_number varchar [null]
+  certification_valid_until date [null]
+  certification_document_url text [null]
+  created_at timestamp [default: `now()`]
+
+  note: "Assigned operator for the order; may be external"
+}
+
+
+
+Enum logistics_time_window {
+  morning
+  afternoon
+  full_day
+}
+
+
+Enum logistics_status {
+  pending
+  confirmed
+  in_transit
+  completed
+  failed
+}
+
+
+Enum confirmation_method {
+  qr_code
+  signature
+  manual
+}
+
+
+Table order_logistics_action {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [ref: > order.id, not null]
+  logistics_type logistics_type [not null] // delivery or pickup
+
+  requested_date date [not null]
+  requested_time_window logistics_time_window [not null] // morning/afternoon/full_day
+  confirmed_datetime timestamp [null]
+
+  status logistics_status [default: 'pending']
+  handled_by_profile_id uuid [ref: > profile.id, null] // optional: owner or transporter
+  transporter_profile_id uuid [ref: > profile.id, null] // if external logistics
+
+  confirmation_method confirmation_method [null]
+  confirmation_time timestamp [null]
+
+  notes text [null]
+  created_at timestamp [default: `now()`]
+
+  Indexes {
+  (order_id, logistics_type) [unique, name: "uq_order_logistics_type"]
+}
+
+}
+
+Table logistics_action_history {
+  id uuid [pk, default: `gen_random_uuid()`]
+  logistics_action_id uuid [ref: > order_logistics_action.id, not null]
+  changed_by_profile_id uuid [ref: > profile.id, not null]
+
+  logistics_type logistics_type [not null] // redundant but frozen snapshot
+  previous_status logistics_status [null]
+  new_status logistics_status [null]
+
+  previous_requested_date date [null]
+  new_requested_date date [null]
+
+  previous_time_window logistics_time_window [null]
+  new_time_window logistics_time_window [null]
+
+  previous_confirmed_datetime timestamp [null]
+  new_confirmed_datetime timestamp [null]
+
+  previous_handled_by_profile_id uuid [ref: > profile.id, null]
+  new_handled_by_profile_id uuid [ref: > profile.id, null]
+
+  previous_transporter_profile_id uuid [ref: > profile.id, null]
+  new_transporter_profile_id uuid [ref: > profile.id, null]
+
+  note text [null]
+  created_at timestamp [default: `now()`]
+
+  note: "Tracks each update to a delivery/pickup action, with before/after values"
+}
+
+
+
+
+Table order_item_unit {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [ref: > order.id, not null]
+  item_unit_id uuid [ref: > item_unit.id, not null]
+  assigned_at timestamp [default: `now()`]
+
+  note: "Links a specific item_unit to an order"
+}
+

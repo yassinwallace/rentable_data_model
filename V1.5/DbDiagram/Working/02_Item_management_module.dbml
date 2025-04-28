@@ -1,0 +1,467 @@
+
+
+Table "profile" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "user_id" UUID [not null]
+  "profile_type" profile_type [not null]
+  "first_name" VARCHAR
+  "last_name" VARCHAR
+  "date_of_birth" DATE
+  "organization_name" VARCHAR
+  "siret_number" VARCHAR
+  "phone_number" VARCHAR
+  "avatar_url" VARCHAR
+  "created_at" TIMESTAMP [default: `now()`]
+}
+
+
+
+
+
+
+
+
+// FROM HERE
+
+
+
+
+
+
+
+Enum "item_status" {
+  "active"
+  "inactive"
+  "pending_review"
+}
+
+Enum "item_condition" {
+  "new"
+  "like_new"
+  "good"
+  "fair"
+  "poor"
+}
+
+Enum "item_type" {
+  "P2P"
+  "B2B"
+  "B2C"
+}
+
+Enum "item_insurance_cost_type" {
+  "flat"
+  "percentage"
+}
+
+Enum "related_items_relation_type" {
+  "accessory"
+  "similar"
+  "complementary"
+}
+
+Enum "bulk_import_status" {
+  "pending"
+  "processing"
+  "completed"
+  "failed"
+}
+
+Enum "item_history_action" {
+  "created"
+  "updated"
+  "deleted"
+  "status_changed"
+}
+
+Table "item" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "owner_profile_id" UUID [not null]
+  "title" VARCHAR(255) [not null]
+  "description" TEXT [not null]
+  "base_price" DECIMAL(10,2) [not null]
+  "currency" CHAR(3) [not null]
+  "item_status" item_status [not null]
+  "item_condition" item_condition [null]
+  "item_type" item_type [not null]
+  "minimum_rental_period" INT
+  "maximum_rental_period" INT
+  "start_hours" VARCHAR(50)
+  "end_hours" VARCHAR(50)
+  "required_certification" certification_type [null]
+  "logistics_mode" logistics_mode [default: 'none']
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    owner_profile_id [name: "idx_item_owner"]
+  }
+
+  Note: "Main catalog listing. Units tracked via item_unit."
+}
+
+
+
+
+Table "item_category" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "parent_id" UUID
+  "name" VARCHAR(100) [not null]
+  "description" TEXT
+  "level" INT [not null]
+  "is_active" BOOLEAN [default: TRUE]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+}
+
+Table "item_category_assignment" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "category_id" UUID [not null]
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_item_cat_assign_item"]
+    category_id [name: "idx_item_cat_assign_cat"]
+  }
+}
+
+Table "item_attributes" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "attribute_name" VARCHAR(100) [not null]
+  "attribute_value" TEXT [not null]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_item_attr_item"]
+  }
+}
+
+Table item_availability {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_id uuid [not null]
+  start_datetime timestamp [not null]
+  end_datetime timestamp [not null]
+  availability_type availability_type [default: 'available']
+  custom_price decimal(10,2)
+  note text
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  note: "Optional pricing overrides and availability at item level"
+}
+
+
+
+Table "item_images" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "image_url" VARCHAR(255) [not null]
+  "is_primary" BOOLEAN [default: FALSE]
+  "display_order" INT [not null]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_item_images_item"]
+  }
+}
+
+Table "item_pricing_tier" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "min_days" INT [not null]
+  "max_days" INT
+  "price_per_day" DECIMAL(10,2) [not null]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_item_price_tier_item"]
+  }
+}
+
+Table "item_maintenance_record" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "maintenance_type" VARCHAR(100) [not null]
+  "description" TEXT
+  "performed_by" VARCHAR(255)
+  "performed_at" TIMESTAMP [not null]
+  "cost" DECIMAL(10,2)
+  "next_maintenance_due" TIMESTAMP
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_item_maint_item"]
+  }
+}
+
+Table "item_rental_rules" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "rule_type" VARCHAR(100) [not null]
+  "rule_value" TEXT [not null]
+  "is_required" BOOLEAN [default: TRUE]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_item_rules_item"]
+  }
+}
+
+Table "item_insurance_options" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "insurance_name" VARCHAR(255) [not null]
+  "description" TEXT
+  "cost" DECIMAL(10,2) [not null]
+  "item_insurance_cost_type" item_insurance_cost_type [not null]
+  "coverage_amount" DECIMAL(10,2) [not null]
+  "is_required" BOOLEAN [default: FALSE]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_item_insurance_item"]
+  }
+}
+
+Table "item_bundle" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "name" VARCHAR(255) [not null]
+  "description" TEXT
+  "discount_percentage" DECIMAL(5,2)
+  "is_active" BOOLEAN [default: TRUE]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+}
+
+Table "items_bundle_assignment" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "bundle_id" UUID [not null]
+  "item_id" UUID [not null]
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    bundle_id [name: "idx_bundle_assign_bundle"]
+    item_id [name: "idx_bundle_assign_item"]
+  }
+}
+
+Table "related_item" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "related_item_id" UUID [not null]
+  "related_items_relation_type" related_items_relation_type [not null]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_related_item_main"]
+    related_item_id [name: "idx_related_item_related"]
+  }
+}
+
+Table "item_bulk_import" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "profile_id" UUID [not null]
+  "import_source" VARCHAR
+  "item_count" INT
+  "status" bulk_import_status [default: 'pending']
+  "error_report" TEXT
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    profile_id [name: "idx_bulk_import_profile"]
+  }
+}
+
+Table "service_level_agreement" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "name" VARCHAR(255) [not null]
+  "description" TEXT
+  "terms" TEXT [not null]
+  "is_active" BOOLEAN [default: TRUE]
+  "created_at" TIMESTAMP [default: `now()`]
+  "updated_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_sla_item"]
+  }
+}
+
+Table "item_history" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "item_id" UUID [not null]
+  "profile_id" UUID [not null]
+  "action" item_history_action [not null]
+  "metadata" JSONB
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    item_id [name: "idx_item_history_item"]
+    profile_id [name: "idx_item_history_profile"]
+  }
+}
+
+Ref:"profile"."id" < "item"."owner_profile_id"
+
+Ref:"item_category"."id" < "item_category"."parent_id"
+
+Ref:"item"."id" < "item_category_assignment"."item_id"
+
+Ref:"item_category"."id" < "item_category_assignment"."category_id"
+
+Ref:"item"."id" < "item_attributes"."item_id"
+
+Ref:"item"."id" < "item_availability"."item_id"
+
+Ref:"item"."id" < "item_images"."item_id"
+
+Ref:"item"."id" < "item_pricing_tier"."item_id"
+
+Ref:"item"."id" < "item_maintenance_record"."item_id"
+
+Ref:"item"."id" < "item_rental_rules"."item_id"
+
+Ref:"item"."id" < "item_insurance_options"."item_id"
+
+Ref:"item_bundle"."id" < "items_bundle_assignment"."bundle_id"
+
+Ref:"item"."id" < "items_bundle_assignment"."item_id"
+
+Ref:"item"."id" < "related_item"."item_id"
+
+Ref:"item"."id" < "related_item"."related_item_id"
+
+Ref:"profile"."id" < "item_bulk_import"."profile_id"
+
+Ref:"item"."id" < "service_level_agreement"."item_id"
+
+Ref:"item"."id" < "item_history"."item_id"
+
+Ref:"profile"."id" < "item_history"."profile_id"
+
+
+
+
+Table item_operator_requirement {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_id uuid [ref: > item.id, not null]
+  certification_type certification_type [not null]
+  is_mandatory boolean [default: true]
+  note text [null]
+
+  note: "Defines what type of certification is needed to operate this item"
+}
+
+Enum logistics_type {
+  delivery
+  pickup
+}
+
+// Logistics Mode Enum: defined per item
+Enum logistics_mode {
+  none       // No delivery offered
+  optional   // Renter can choose
+  required   // Must be delivered
+}
+
+// Party Type Enum: who handles logistics
+Enum logistics_party_type {
+  renter
+  owner
+  transporter
+}
+
+
+// Item Logistics Option Table
+Table item_logistics_option {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_id uuid [ref: > item.id, not null]
+  logistics_type logistics_type [not null] // delivery or pickup
+  party_type logistics_party_type [not null] // renter / owner / transporter
+  transporter_organization_profile_id uuid [ref: > profile.id, null]
+
+  note: "Defines who can handle delivery or pickup for a specific item"
+}
+
+Table item_logistics_rule {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_id uuid [ref: > item.id, not null]
+  min_lead_time_hours int [null]
+  allowed_days varchar[] [null]
+  allowed_hours jsonb [null]
+  buffer_between_orders_minutes int [null]
+  created_at timestamp [default: `now()`]
+}
+
+
+Table item_blackout_date {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_id uuid [ref: > item.id, not null]
+  start_date date [not null]
+  end_date date [not null]
+  reason text
+  is_recurring boolean [default: false]
+  recurrence_pattern varchar [null] // optional: "yearly", "weekly"
+  created_at timestamp [default: `now()`]
+
+  note: "Blocks handover/logistics for this specific item during the given period"
+}
+
+Enum item_block_type {
+  maintenance
+  internal_use
+  reserved_for_demo
+  unavailable_other
+}
+
+
+Table item_unit_block_date {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_unit_id uuid [ref: > item_unit.id, not null]
+  block_type item_block_type [not null]
+  start_datetime timestamp [not null]
+  end_datetime timestamp [not null]
+  reason text
+  created_at timestamp [default: `now()`]
+
+  note: "Blocks a specific unit during this period (e.g., maintenance, internal use)"
+}
+
+
+
+
+Table item_unit {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_id uuid [ref: > item.id, not null]
+  serial_number varchar
+  internal_reference varchar
+  item_condition item_condition
+  is_active boolean [default: true]
+  current_location_id uuid [null]
+  created_at timestamp [default: `now()`]
+
+  note: "Represents a physical instance of a rentable item"
+}
+
+Table item_unit_availability {
+  id uuid [pk, default: `gen_random_uuid()`]
+  item_unit_id uuid [ref: > item_unit.id, not null]
+  start_datetime timestamp [not null]
+  end_datetime timestamp [not null]
+  is_available boolean [not null]
+  note text
+  created_at timestamp [default: `now()`]
+
+  note: "System-managed availability override for a specific unit. Not visible to users."
+}
+
+

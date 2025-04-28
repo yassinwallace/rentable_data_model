@@ -1,0 +1,174 @@
+
+Enum "profile_type" {
+  "individual"
+  "organization"
+}
+
+Enum "invitation_status" {
+  "pending"
+  "accepted"
+  "expired"
+}
+
+Table "user_ref" {
+  "user_id" UUID [pk]
+}
+
+Table "profile" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "user_id" UUID [not null]
+  "profile_type" profile_type [not null]
+  "first_name" VARCHAR
+  "last_name" VARCHAR
+  "date_of_birth" DATE
+  "organization_name" VARCHAR
+  "siret_number" VARCHAR
+  "phone_number" VARCHAR
+  "avatar_url" VARCHAR
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    user_id [name: "idx_profile_user_id"]
+  }
+}
+
+Table "organization_invitation" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "organization_profile_id" UUID [not null]
+  "invited_by_profile_id" UUID [not null]
+  "email" VARCHAR [not null]
+  "role" VARCHAR
+  "token" VARCHAR [not null]
+  "status" invitation_status [default: 'pending']
+  "expires_at" TIMESTAMP [not null]
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    organization_profile_id [name: "idx_org_invite_org_id"]
+    email [name: "idx_org_invite_email"]
+  }
+}
+
+Table "profile_membership" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "profile_id" UUID [not null]
+  "organization_profile_id" UUID [not null]
+  "status" VARCHAR [default: 'active']
+  "joined_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    profile_id [name: "idx_profile_membership_profile"]
+    organization_profile_id [name: "idx_profile_membership_org"]
+  }
+}
+
+Table "role" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "name" VARCHAR [not null]
+  "description" TEXT
+  "is_active" BOOLEAN [default: TRUE]
+  "created_at" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+  "updated_at" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "permission" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "name" VARCHAR [unique, not null]
+  "description" TEXT
+  "category" VARCHAR [not null]
+  "created_at" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+  "updated_at" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "role_permission" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "role_id" UUID
+  "permission_id" UUID
+  "created_at" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    role_id [name: "idx_role_permission_role_id"]
+    permission_id [name: "idx_role_permission_permission_id"]
+  }
+}
+
+Table "profile_role" {
+  "id" UUID [pk, default: `gen_random_uuid()`]
+  "profile_id" UUID [not null]
+  "organization_profile_id" UUID
+  "role_id" UUID [not null]
+  "created_at" TIMESTAMP [default: `now()`]
+
+  Indexes {
+    (profile_id, organization_profile_id, role_id) [unique]
+    profile_id [name: "idx_profile_role_profile"]
+    organization_profile_id [name: "idx_profile_role_org"]
+    role_id [name: "idx_profile_role_role"]
+  }
+}
+
+Ref:"user_ref"."user_id" < "profile"."user_id"
+
+Ref:"profile"."id" < "organization_invitation"."organization_profile_id"
+
+Ref:"profile"."id" < "organization_invitation"."invited_by_profile_id"
+
+Ref:"profile"."id" < "profile_membership"."profile_id"
+
+Ref:"profile"."id" < "profile_membership"."organization_profile_id"
+
+Ref:"role"."id" < "role_permission"."role_id"
+
+Ref:"permission"."id" < "role_permission"."permission_id"
+
+Ref:"profile"."id" < "profile_role"."profile_id"
+
+Ref:"profile"."id" < "profile_role"."organization_profile_id"
+
+Ref:"role"."id" < "profile_role"."role_id"
+
+
+
+Table profile_certification {
+  id uuid [pk, default: `gen_random_uuid()`]
+  profile_id uuid [ref: > profile.id, not null]
+  certification_type certification_type [not null]
+  certification_number varchar [null]
+  issued_by varchar [null]
+  valid_from date
+  valid_until date
+  document_url text [null]
+  created_at timestamp [default: `now()`]
+
+  note: "Certifications linked to registered profiles"
+}
+
+Enum certification_type {
+  CACES
+  Forklift
+  Crane
+  Other
+}
+
+Table organization_logistics_rule {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_profile_id uuid [ref: > profile.id, not null]
+  min_lead_time_hours int [default: 24]
+  allowed_days varchar[] // e.g., ['mon','tue','wed']
+  allowed_hours jsonb    // e.g., {"mon": ["08:00-17:00"], "tue": [...]}
+  buffer_between_orders_minutes int [default: 60]
+  created_at timestamp [default: `now()`]
+}
+
+Table organization_blackout_date {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_profile_id uuid [ref: > profile.id, not null]
+  start_date date [not null]
+  end_date date [not null]
+  reason text
+  is_recurring boolean [default: false]
+  recurrence_pattern varchar [null] // optional: e.g. "yearly", "weekly"
+  created_at timestamp [default: `now()`]
+
+  note: "Defines periods when logistics actions (handover/delivery/pickup) are not allowed for the organization"
+}
