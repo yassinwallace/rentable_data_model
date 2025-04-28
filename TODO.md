@@ -56,3 +56,13 @@ CASE
   ELSE 'HELD'
 END AS computed_status
 Let me know if you want a full SQL view snippet.
+
+
+
+
+So we have:
+organization_logistics_rule -> User Management Module
+item_logistics_rule -> Item Management Module
+item_maintenance_block -> Item Management Module >> item_block
+organization_blackout_date -> User Management Module
+item_blackout_date -> Item Management Module
