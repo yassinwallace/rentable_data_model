@@ -371,7 +371,18 @@ CREATE TABLE "order_item_unit" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "order_id" UUID NOT NULL,
   "item_unit_id" UUID NOT NULL,
+  "custom_price" DECIMAL(10,2), 
+  "rate_unit" rate_unit, 
   "assigned_at" TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE "order_item_unit_addon" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "order_item_unit_id" UUID NOT NULL,
+  "addon_id" UUID NOT NULL,
+  "quantity" INT NOT NULL DEFAULT 1,
+  "custom_price" DECIMAL(10,2), 
+  "created_at" TIMESTAMP DEFAULT now()
 );
 
 -- Add Foreign Key Constraints
@@ -479,6 +490,15 @@ ALTER TABLE "order_item_unit" ADD CONSTRAINT "fk_order_item_unit_order"
 
 ALTER TABLE "order_item_unit" ADD CONSTRAINT "fk_order_item_unit_item_unit" 
   FOREIGN KEY ("item_unit_id") REFERENCES "item_unit" ("id");
+
+ALTER TABLE "order_item_unit_addon" ADD CONSTRAINT "fk_order_item_unit_addon_order_item_unit" 
+  FOREIGN KEY ("order_item_unit_id") REFERENCES "order_item_unit" ("id");
+
+ALTER TABLE "order_item_unit_addon" ADD CONSTRAINT "fk_order_item_unit_addon_addon" 
+  FOREIGN KEY ("addon_id") REFERENCES "item_addon" ("id");
+
+CREATE INDEX "idx_order_item_unit_addon_order_item_unit" ON "order_item_unit_addon" ("order_item_unit_id");
+CREATE INDEX "idx_order_item_unit_addon_addon" ON "order_item_unit_addon" ("addon_id");
 
 -- Add unique constraints
 ALTER TABLE "order_deposit" ADD CONSTRAINT "uq_order_deposit_order_id" 

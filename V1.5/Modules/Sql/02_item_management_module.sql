@@ -205,11 +205,22 @@ CREATE TABLE "item_pricing_tier" (
   "max_duration" INT,
   "price" DECIMAL(10,2) NOT NULL,
   "rate_unit" rate_unit NOT NULL DEFAULT 'day',
+  "start_date" DATE, 
+  "end_date" DATE,   
+  "name" VARCHAR(100), 
+  "tier_type" VARCHAR(20) NOT NULL DEFAULT 'standard', -- 'standard', 'promotional', 'seasonal'
+  "is_promotional" BOOLEAN DEFAULT FALSE, -- Explicit flag for promotional pricing
+  "priority" INT DEFAULT 0, -- Higher priority tiers override lower ones when multiple apply
   "created_at" TIMESTAMP DEFAULT now(),
-  "updated_at" TIMESTAMP DEFAULT now()
+  "updated_at" TIMESTAMP DEFAULT now(),
+  CONSTRAINT "check_promotional_priority" CHECK (
+    (is_promotional = TRUE AND priority >= 100) OR 
+    (is_promotional = FALSE)
+  ) -- Ensures promotional prices always have high priority
 );
 
-CREATE INDEX "idx_item_price_tier_item" ON "item_pricing_tier" ("item_id");
+CREATE INDEX "idx_item_pricing_tier_item" ON "item_pricing_tier" ("item_id");
+CREATE INDEX "idx_item_pricing_tier_dates" ON "item_pricing_tier" ("start_date", "end_date");
 
 CREATE TABLE "item_maintenance_record" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -394,15 +405,30 @@ CREATE TABLE "item_unit_availability" (
   "created_at" TIMESTAMP DEFAULT now()
 );
 
--- Add structured tax support (ERP style)
-CREATE TABLE "tax" (
+-- Support Add-On Charges Per Item
+CREATE TABLE "item_addon" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "item_id" UUID NOT NULL,
   "name" VARCHAR(100) NOT NULL,
-  "rate" DECIMAL(5,2) NOT NULL, -- e.g., 20.00 for 20%
-  "is_active" BOOLEAN DEFAULT TRUE,
   "description" TEXT,
-  "created_at" TIMESTAMP DEFAULT now()
+  "price" DECIMAL(10,2) NOT NULL,
+  "is_required" BOOLEAN DEFAULT FALSE,
+  "created_at" TIMESTAMP DEFAULT now(),
+  "updated_at" TIMESTAMP DEFAULT now()
 );
+
+-- Promotional Pricing by Time Window
+-- This table is replaced by the enhanced item_pricing_tier table
+-- CREATE TABLE "item_promo_pricing" (
+--   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   "item_id" UUID NOT NULL,
+--   "start_datetime" TIMESTAMP NOT NULL,
+--   "end_datetime" TIMESTAMP NOT NULL,
+--   "promo_price" DECIMAL(10,2) NOT NULL,
+--   "rate_unit" rate_unit NOT NULL DEFAULT 'day',
+--   "label" VARCHAR(100), -- e.g., "Summer Discount"
+--   "created_at" TIMESTAMP DEFAULT now()
+-- );
 
 CREATE TABLE "item_tax_assignment" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -422,6 +448,18 @@ ALTER TABLE "item_tax_assignment" ADD CONSTRAINT "fk_item_tax_assignment_tax"
 -- Create indexes for tax tables
 CREATE INDEX "idx_item_tax_assignment_item" ON "item_tax_assignment" ("item_id");
 CREATE INDEX "idx_item_tax_assignment_tax" ON "item_tax_assignment" ("tax_id");
+
+-- Add foreign key constraints for add-on and promo pricing tables
+ALTER TABLE "item_addon" ADD CONSTRAINT "fk_item_addon_item" 
+  FOREIGN KEY ("item_id") REFERENCES "item" ("id");
+
+-- ALTER TABLE "item_promo_pricing" ADD CONSTRAINT "fk_item_promo_pricing_item" 
+--   FOREIGN KEY ("item_id") REFERENCES "item" ("id");
+
+-- Create indexes for add-on and promo pricing tables
+CREATE INDEX "idx_item_addon_item" ON "item_addon" ("item_id");
+-- CREATE INDEX "idx_item_promo_pricing_item" ON "item_promo_pricing" ("item_id");
+-- CREATE INDEX "idx_item_promo_pricing_dates" ON "item_promo_pricing" ("start_datetime", "end_datetime");
 
 -- Add Foreign Key Constraints
 ALTER TABLE "item" ADD CONSTRAINT "fk_item_owner_profile" 
@@ -501,3 +539,13 @@ ALTER TABLE "item_unit_block_date" ADD CONSTRAINT "fk_item_unit_block_date_unit"
 
 ALTER TABLE "item_unit_availability" ADD CONSTRAINT "fk_item_unit_availability_unit" 
   FOREIGN KEY ("item_unit_id") REFERENCES "item_unit" ("id");
+
+-- Add structured tax support (ERP style)
+CREATE TABLE "tax" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "name" VARCHAR(100) NOT NULL,
+  "rate" DECIMAL(5,2) NOT NULL, 
+  "is_active" BOOLEAN DEFAULT TRUE,
+  "description" TEXT,
+  "created_at" TIMESTAMP DEFAULT now()
+);
