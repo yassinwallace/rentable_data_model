@@ -2,7 +2,7 @@ import os
 import re
 import argparse
 
-MODULES_DIR = os.path.join(os.path.dirname(__file__), '..', 'Modules')
+MODULES_DIR = os.path.join(os.path.dirname(__file__), '..', 'Modules', 'Sql')
 DEFAULT_OUTPUT_FILE = os.path.join(os.path.dirname(__file__), 'mono_tenant_template.sql')
 DEFAULT_OUTPUT_FILE_NP = os.path.join(os.path.dirname(__file__), 'mono_tenant_template_no_polymorphic.sql')
 
