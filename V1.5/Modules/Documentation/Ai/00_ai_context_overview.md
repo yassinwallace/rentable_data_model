@@ -52,6 +52,14 @@ All logistics, usage tracking, handovers, and availability apply specifically to
 - Documents have verification workflows and access control
 - Mandatory documents can be required before equipment handover
 
+### Billing and Financial Management
+- Dual-invoice system separates customer billing from platform fee tracking
+- Rental invoices show the full amount to renters (with platform fee bundled)
+- Platform fee invoices show only the commission charged to owners
+- Flexible fee structures support percentage-based, flat, and tiered calculations
+- Complete payout reconciliation tracks gross amounts, fees, and net payouts
+- Line items provide detailed breakdown of all charges
+
 ### Availability Management
 - **Block Dates**: Periods when an item/unit is completely unavailable for rental
 - **Blackout Dates**: Periods when handovers/returns are restricted, but the rental period can include these dates

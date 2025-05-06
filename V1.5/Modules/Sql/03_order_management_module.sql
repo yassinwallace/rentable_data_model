@@ -257,6 +257,27 @@ CREATE TYPE incident_status AS ENUM (
   'archived'
 );
 
+-- Create ENUMs for invoice system
+CREATE TYPE invoice_status AS ENUM (
+  'draft',
+  'issued',
+  'paid',
+  'partially_paid',
+  'cancelled',
+  'overdue'
+);
+
+CREATE TYPE invoice_type AS ENUM (
+  'rental',      -- Invoice to renter for the rental (visible to renter)
+  'platform_fee' -- Invoice to owner for platform fees (internal)
+);
+
+CREATE TYPE fee_calculation_type AS ENUM (
+  'percentage',  -- Fee calculated as percentage of order value
+  'flat',        -- Flat fee regardless of order value
+  'tiered'       -- Fee based on tiered structure
+);
+
 -- Create Tables
 CREATE TABLE "order" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -455,6 +476,86 @@ CREATE TABLE "order_item_unit_addon" (
   "created_at" TIMESTAMP DEFAULT now()
 );
 
+CREATE TABLE "invoice" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "invoice_number" VARCHAR(50) NOT NULL,
+  "order_id" UUID NOT NULL,
+  "invoice_type" invoice_type NOT NULL,
+  "issuer_profile_id" UUID NOT NULL, -- Platform profile
+  "recipient_profile_id" UUID NOT NULL, -- Renter or owner profile
+  "total_amount" NUMERIC(10, 2) NOT NULL,
+  "tax_amount" NUMERIC(10, 2) DEFAULT 0,
+  "currency_code" CHAR(3) NOT NULL,
+  "status" invoice_status DEFAULT 'draft',
+  "issue_date" DATE,
+  "due_date" DATE,
+  "paid_date" DATE,
+  "notes" TEXT,
+  "created_at" TIMESTAMP DEFAULT now(),
+  "updated_at" TIMESTAMP DEFAULT now(),
+  CONSTRAINT "invoice_total_amount_positive" CHECK (total_amount >= 0)
+);
+
+CREATE TABLE "invoice_line_item" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "invoice_id" UUID NOT NULL,
+  "description" VARCHAR(255) NOT NULL,
+  "quantity" NUMERIC(10, 2) NOT NULL DEFAULT 1,
+  "unit_price" NUMERIC(10, 2) NOT NULL,
+  "total_price" NUMERIC(10, 2) NOT NULL,
+  "tax_rate" NUMERIC(5, 2),
+  "tax_amount" NUMERIC(10, 2),
+  "discount_amount" NUMERIC(10, 2) DEFAULT 0,
+  "item_type" VARCHAR(50), -- e.g., 'rental', 'addon', 'fee', 'tax'
+  "reference_id" UUID, -- Can reference order_item_unit, order_item_unit_addon, etc.
+  "created_at" TIMESTAMP DEFAULT now(),
+  CONSTRAINT "invoice_line_item_quantity_positive" CHECK (quantity > 0),
+  CONSTRAINT "invoice_line_item_unit_price_non_negative" CHECK (unit_price >= 0),
+  CONSTRAINT "invoice_line_item_total_price_non_negative" CHECK (total_price >= 0)
+);
+
+CREATE TABLE "platform_fee_config" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "organization_profile_id" UUID NOT NULL, -- Owner organization
+  "calculation_type" fee_calculation_type NOT NULL,
+  "fee_percentage" NUMERIC(5, 2), -- Used when calculation_type is 'percentage'
+  "flat_fee_amount" NUMERIC(10, 2), -- Used when calculation_type is 'flat'
+  "min_fee_amount" NUMERIC(10, 2), -- Minimum fee regardless of calculation
+  "max_fee_amount" NUMERIC(10, 2), -- Maximum fee cap
+  "is_active" BOOLEAN DEFAULT TRUE,
+  "effective_from" DATE NOT NULL,
+  "effective_to" DATE,
+  "created_at" TIMESTAMP DEFAULT now(),
+  "updated_at" TIMESTAMP DEFAULT now(),
+  CONSTRAINT "platform_fee_percentage_range" CHECK (fee_percentage IS NULL OR (fee_percentage >= 0 AND fee_percentage <= 100)),
+  CONSTRAINT "platform_fee_flat_amount_non_negative" CHECK (flat_fee_amount IS NULL OR flat_fee_amount >= 0),
+  CONSTRAINT "platform_fee_min_amount_non_negative" CHECK (min_fee_amount IS NULL OR min_fee_amount >= 0),
+  CONSTRAINT "platform_fee_max_amount_valid" CHECK (max_fee_amount IS NULL OR (max_fee_amount >= 0 AND (min_fee_amount IS NULL OR max_fee_amount >= min_fee_amount)))
+);
+
+CREATE TABLE "order_payout" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "order_id" UUID NOT NULL,
+  "owner_profile_id" UUID NOT NULL,
+  "rental_invoice_id" UUID NOT NULL,
+  "platform_fee_invoice_id" UUID NOT NULL,
+  "gross_amount" NUMERIC(10, 2) NOT NULL, -- Total amount paid by renter
+  "fee_amount" NUMERIC(10, 2) NOT NULL, -- Platform fee deducted
+  "net_amount" NUMERIC(10, 2) NOT NULL, -- Amount paid to owner
+  "status" payment_status DEFAULT 'PENDING',
+  "payout_date" TIMESTAMP,
+  "external_reference" VARCHAR(100),
+  "notes" TEXT,
+  "created_at" TIMESTAMP DEFAULT now(),
+  "updated_at" TIMESTAMP DEFAULT now(),
+  CONSTRAINT "order_payout_amounts_valid" CHECK (
+    gross_amount >= 0 AND 
+    fee_amount >= 0 AND 
+    net_amount >= 0 AND 
+    gross_amount = net_amount + fee_amount
+  )
+);
+
 -- Add Foreign Key Constraints
 ALTER TABLE "order" ADD CONSTRAINT "fk_order_ordered_by_profile" 
   FOREIGN KEY ("ordered_by_profile_id") REFERENCES "profile" ("id");
@@ -585,12 +686,46 @@ ALTER TABLE "order_item_unit_addon" ADD CONSTRAINT "fk_order_item_unit_addon_add
 CREATE INDEX "idx_order_item_unit_addon_order_item_unit" ON "order_item_unit_addon" ("order_item_unit_id");
 CREATE INDEX "idx_order_item_unit_addon_addon" ON "order_item_unit_addon" ("addon_id");
 
+-- Add foreign key constraints for invoice system
+ALTER TABLE "invoice" ADD CONSTRAINT "fk_invoice_order" 
+  FOREIGN KEY ("order_id") REFERENCES "order" ("id");
+
+ALTER TABLE "invoice" ADD CONSTRAINT "fk_invoice_issuer" 
+  FOREIGN KEY ("issuer_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "invoice" ADD CONSTRAINT "fk_invoice_recipient" 
+  FOREIGN KEY ("recipient_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "invoice_line_item" ADD CONSTRAINT "fk_invoice_line_item_invoice" 
+  FOREIGN KEY ("invoice_id") REFERENCES "invoice" ("id");
+
+ALTER TABLE "platform_fee_config" ADD CONSTRAINT "fk_platform_fee_config_organization" 
+  FOREIGN KEY ("organization_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "order_payout" ADD CONSTRAINT "fk_order_payout_order" 
+  FOREIGN KEY ("order_id") REFERENCES "order" ("id");
+
+ALTER TABLE "order_payout" ADD CONSTRAINT "fk_order_payout_owner" 
+  FOREIGN KEY ("owner_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "order_payout" ADD CONSTRAINT "fk_order_payout_rental_invoice" 
+  FOREIGN KEY ("rental_invoice_id") REFERENCES "invoice" ("id");
+
+ALTER TABLE "order_payout" ADD CONSTRAINT "fk_order_payout_platform_fee_invoice" 
+  FOREIGN KEY ("platform_fee_invoice_id") REFERENCES "invoice" ("id");
+
 -- Add unique constraints
 ALTER TABLE "order_deposit" ADD CONSTRAINT "uq_order_deposit_order_id" 
   UNIQUE ("order_id");
 
 ALTER TABLE "order_deposit" ADD CONSTRAINT "uq_order_deposit_payment_id" 
   UNIQUE ("order_payment_id");
+
+ALTER TABLE "invoice" ADD CONSTRAINT "uq_invoice_number" 
+  UNIQUE ("invoice_number");
+
+ALTER TABLE "order_payout" ADD CONSTRAINT "uq_order_payout_order_id" 
+  UNIQUE ("order_id");
 
 -- Track item unit usage metrics at handover and return
 CREATE TABLE "order_unit_metric_reading" (

@@ -48,6 +48,14 @@ Foreign key constraints are defined in the module where the referenced table exi
 - `deposit_claim.order_deposit_id` → `order_deposit.id`
 - This creates a structured flow from incidents to disputes to financial claims
 
+### Order Management Billing Flow
+- `invoice.order_id` → `order.id`
+- `invoice_line_item.invoice_id` → `invoice.id`
+- `order_payout.rental_invoice_id` → `invoice.id`
+- `order_payout.platform_fee_invoice_id` → `invoice.id`
+- `platform_fee_config.organization_profile_id` → `profile.id`
+- This creates a comprehensive financial tracking system for rentals and platform fees
+
 ### Document Management → All Other Modules
 - `item_document.item_id` → `item.id`
 - `item_unit_document.item_unit_id` → `item_unit.id`
@@ -80,6 +88,13 @@ Foreign key constraints are defined in the module where the referenced table exi
 3. If unresolved, the incident may escalate to a dispute (Order Management)
 4. Deposit claims may be processed based on dispute outcomes (Order Management)
 5. Supporting documents are attached throughout the process (Document Management)
+
+### Billing and Payout Flow
+1. An order is confirmed (Order Management)
+2. A rental invoice is generated for the renter (Order Management)
+3. When the order is completed, a platform fee invoice is generated for the owner (Order Management)
+4. Payout is calculated by deducting platform fees from the rental amount (Order Management)
+5. Financial records are maintained for accounting and reconciliation purposes
 
 ## [CONTEXT] File Naming Convention
 

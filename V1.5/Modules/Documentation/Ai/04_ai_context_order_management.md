@@ -165,6 +165,86 @@ The Order Management module (03) handles all aspects of rental transactions in t
 
 This structured approach enables clean workflows, transparent history, and clear financial/operational accountability throughout the incident management process.
 
+### 8. Rental Billing and Platform Fee Tracking
+
+**Purpose**: Provides a comprehensive invoicing system for rental transactions and platform fee management.
+
+#### Invoice
+
+**Entity**: `invoice`
+- Links to an order via `order_id`
+- Classified by `invoice_type` (rental, platform_fee)
+- Records issuer and recipient profiles
+- Includes financial details: total amount, tax amount, currency
+- Has status tracking via `invoice_status` enum
+- Tracks important dates: issue date, due date, paid date
+
+**Business Rules**:
+- Two types of invoices are generated for each order:
+  - **Rental Invoice**: Issued by the platform on behalf of the owner to the renter
+  - **Platform Fee Invoice**: Issued by the platform to the owner
+- Rental invoices include the total rental price (with platform fee bundled)
+- Platform fee invoices show only the commission charged by the platform
+- Each invoice has a unique invoice number for legal and accounting purposes
+- Invoices progress through a defined lifecycle (draft → issued → paid)
+
+#### Invoice Line Item
+
+**Entity**: `invoice_line_item`
+- Links to an invoice via `invoice_id`
+- Contains detailed information about each charge
+- Includes quantity, unit price, and total price
+- Can include tax rate and amount
+- References the specific item being charged (e.g., rental, add-on)
+
+**Business Rules**:
+- Line items provide itemized breakdown of charges
+- Each line item can reference the specific entity it represents
+- Tax information is preserved for accounting and compliance
+- Quantities and prices must be positive (enforced by constraints)
+
+#### Platform Fee Configuration
+
+**Entity**: `platform_fee_config`
+- Links to an organization profile via `organization_profile_id`
+- Defines how platform fees are calculated for that organization
+- Supports multiple calculation methods:
+  - Percentage-based fees (percentage of order value)
+  - Flat fees (fixed amount per order)
+  - Tiered fees (based on order value ranges)
+- Includes minimum and maximum fee amounts
+- Has effective date range for fee changes over time
+
+**Business Rules**:
+- Each organization can have its own fee structure
+- Fee configurations can change over time with effective dates
+- Minimum fees ensure platform revenue even for small orders
+- Maximum fees cap the platform's take on large orders
+- Constraints ensure fee values are within valid ranges
+
+#### Order Payout
+
+**Entity**: `order_payout`
+- Links to an order via `order_id`
+- Links to the owner profile via `owner_profile_id`
+- References both rental and platform fee invoices
+- Tracks gross amount, fee amount, and net amount
+- Includes payment status and external references
+
+**Business Rules**:
+- Payouts represent the financial settlement between platform and owner
+- Gross amount equals the sum of net amount and fee amount (enforced by constraint)
+- Each order has exactly one payout record
+- Payout status tracks the payment lifecycle to the owner
+
+**Relationship Structure**:
+- Order → Invoices: One-to-many (an order has multiple invoices of different types)
+- Invoice → Line Items: One-to-many (an invoice contains multiple line items)
+- Organization → Fee Config: One-to-many (an organization can have multiple fee configurations over time)
+- Order → Payout: One-to-one (each order has exactly one payout record)
+
+This structured approach enables comprehensive financial tracking, clear fee transparency, and proper accounting for both the platform and equipment owners.
+
 ## [CONTEXT] Relationships with Other Modules
 
 ### User Management Module
