@@ -241,7 +241,8 @@ CREATE TABLE "order" (
   "start_time" TIMESTAMP NOT NULL,
   "end_time" TIMESTAMP NOT NULL,
   "total_price" NUMERIC(10, 2),
-  "currency" VARCHAR(10),
+  "total_tax_amount" NUMERIC(10, 2),
+  "currency_code" CHAR(3) REFERENCES "currency"("code"),
   "note" TEXT,
   "created_at" TIMESTAMP DEFAULT now(),
   "updated_at" TIMESTAMP DEFAULT now()
@@ -389,6 +390,7 @@ CREATE TABLE "order_item_unit" (
   "rate_unit" rate_unit, 
   "tax_id" UUID, 
   "tax_rate" DECIMAL(5,2), 
+  "tax_amount" DECIMAL(10,2),
   "tax_included_in_price" BOOLEAN DEFAULT FALSE, 
   "assigned_at" TIMESTAMP DEFAULT now()
 );
