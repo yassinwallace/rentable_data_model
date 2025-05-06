@@ -548,6 +548,13 @@ ALTER TABLE "item_unit_block_date" ADD CONSTRAINT "fk_item_unit_block_date_unit"
 ALTER TABLE "item_unit_availability" ADD CONSTRAINT "fk_item_unit_availability_unit" 
   FOREIGN KEY ("item_unit_id") REFERENCES "item_unit" ("id");
 
+-- Document management foreign key constraints
+ALTER TABLE "item_document" ADD CONSTRAINT "fk_item_document_item" 
+  FOREIGN KEY ("item_id") REFERENCES "item" ("id");
+
+ALTER TABLE "item_unit_document" ADD CONSTRAINT "fk_item_unit_document_item_unit" 
+  FOREIGN KEY ("item_unit_id") REFERENCES "item_unit" ("id");
+
 -- Add structured tax support (ERP style)
 CREATE TABLE "tax" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),

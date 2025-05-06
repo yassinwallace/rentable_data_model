@@ -205,3 +205,19 @@ ALTER TABLE "organization_blackout_date" ADD CONSTRAINT "fk_org_blackout_date_pr
 
 ALTER TABLE "profile_discount" ADD CONSTRAINT "fk_profile_discount_profile" 
   FOREIGN KEY ("profile_id") REFERENCES "profile" ("id");
+
+-- Customizable Usage Metrics per Organization moved to 00_organization_management_module.sql
+
+-- Foreign key constraints for tables in other modules that reference tables in this module
+ALTER TABLE "organization_usage_metric" ADD CONSTRAINT "fk_organization_usage_metric_profile" 
+  FOREIGN KEY ("organization_profile_id") REFERENCES "profile" ("id");
+
+-- Document management foreign key constraints
+ALTER TABLE "document" ADD CONSTRAINT "fk_document_uploaded_by_profile" 
+  FOREIGN KEY ("uploaded_by_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "document" ADD CONSTRAINT "fk_document_verified_by_profile" 
+  FOREIGN KEY ("verified_by_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "profile_document" ADD CONSTRAINT "fk_profile_document_profile" 
+  FOREIGN KEY ("profile_id") REFERENCES "profile" ("id");

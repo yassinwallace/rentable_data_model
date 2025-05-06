@@ -201,14 +201,17 @@ CREATE TYPE deposit_status AS ENUM (
 );
 
 CREATE TYPE dispute_status AS ENUM (
-  'OPEN',
-  'RESOLVED',
-  'ESCALATED'
+  'open',
+  'under_review',
+  'resolved',
+  'rejected'
 );
 
 CREATE TYPE deposit_action_type AS ENUM (
-  'CLAIM',
-  'RELEASE'
+  'hold',
+  'release',
+  'partial_claim',
+  'full_claim'
 );
 
 CREATE TYPE logistics_time_window AS ENUM (
@@ -229,6 +232,29 @@ CREATE TYPE confirmation_method AS ENUM (
   'qr_code',
   'signature',
   'manual'
+);
+
+-- Create new ENUMs for the incident tracking and dispute resolution system
+CREATE TYPE incident_type AS ENUM (
+  'damage',
+  'malfunction',
+  'loss',
+  'injury',
+  'delay',
+  'other'
+);
+
+CREATE TYPE incident_reported_during AS ENUM (
+  'handover',
+  'in_use',
+  'return',
+  'other'
+);
+
+CREATE TYPE incident_status AS ENUM (
+  'open',
+  'resolved',
+  'archived'
 );
 
 -- Create Tables
@@ -309,25 +335,50 @@ CREATE TABLE "order_deposit" (
   "created_at" TIMESTAMP DEFAULT now()
 );
 
-CREATE TABLE "order_dispute" (
+CREATE TABLE "order_incident" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "order_id" UUID NOT NULL,
-  "raised_by_profile_id" UUID NOT NULL,
-  "reason" TEXT,
-  "status" dispute_status DEFAULT 'OPEN',
-  "resolution" TEXT,
-  "created_at" TIMESTAMP DEFAULT now()
+  "reported_by_profile_id" UUID NOT NULL,
+  "incident_type" incident_type NOT NULL,
+  "reported_during" incident_reported_during NOT NULL,
+  "description" TEXT NOT NULL,
+  "photo_urls" TEXT[],
+  "document_ids" UUID[],
+  "status" incident_status DEFAULT 'open',
+  "resolution_notes" TEXT,
+  "resolved_by_profile_id" UUID,
+  "resolved_at" TIMESTAMP,
+  "created_at" TIMESTAMP DEFAULT now(),
+  "updated_at" TIMESTAMP DEFAULT now()
 );
 
-CREATE TABLE "order_deposit_action" (
+CREATE TABLE "order_dispute" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "order_incident_id" UUID NOT NULL,
+  "raised_by_profile_id" UUID NOT NULL,
+  "dispute_reason" TEXT NOT NULL,
+  "status" dispute_status DEFAULT 'open',
+  "resolution_summary" TEXT,
+  "reviewed_by_profile_id" UUID,
+  "raised_at" TIMESTAMP DEFAULT now(),
+  "closed_at" TIMESTAMP,
+  "created_at" TIMESTAMP DEFAULT now(),
+  "updated_at" TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE "deposit_claim" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "order_dispute_id" UUID,
   "order_deposit_id" UUID NOT NULL,
-  "action_type" deposit_action_type NOT NULL,
   "amount" NUMERIC(10, 2) NOT NULL,
-  "reason" TEXT,
-  "initiated_by_profile_id" UUID,
+  "claim_reason" TEXT NOT NULL,
+  "claim_category" VARCHAR(50) NOT NULL,
+  "status" approval_status DEFAULT 'pending',
   "approved_by_profile_id" UUID,
-  "created_at" TIMESTAMP DEFAULT now()
+  "approved_at" TIMESTAMP,
+  "created_at" TIMESTAMP DEFAULT now(),
+  "updated_at" TIMESTAMP DEFAULT now(),
+  CONSTRAINT "deposit_claim_amount_positive" CHECK (amount > 0)
 );
 
 CREATE TABLE "order_operator_assignment" (
@@ -456,19 +507,31 @@ ALTER TABLE "order_deposit" ADD CONSTRAINT "fk_order_deposit_order"
 ALTER TABLE "order_deposit" ADD CONSTRAINT "fk_order_deposit_payment" 
   FOREIGN KEY ("order_payment_id") REFERENCES "order_payment" ("id");
 
-ALTER TABLE "order_dispute" ADD CONSTRAINT "fk_order_dispute_order" 
+ALTER TABLE "order_incident" ADD CONSTRAINT "fk_order_incident_order" 
   FOREIGN KEY ("order_id") REFERENCES "order" ("id");
+
+ALTER TABLE "order_incident" ADD CONSTRAINT "fk_order_incident_reported_by" 
+  FOREIGN KEY ("reported_by_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "order_incident" ADD CONSTRAINT "fk_order_incident_resolved_by" 
+  FOREIGN KEY ("resolved_by_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "order_dispute" ADD CONSTRAINT "fk_order_dispute_incident" 
+  FOREIGN KEY ("order_incident_id") REFERENCES "order_incident" ("id");
 
 ALTER TABLE "order_dispute" ADD CONSTRAINT "fk_order_dispute_raised_by" 
   FOREIGN KEY ("raised_by_profile_id") REFERENCES "profile" ("id");
 
-ALTER TABLE "order_deposit_action" ADD CONSTRAINT "fk_order_deposit_action_deposit" 
+ALTER TABLE "order_dispute" ADD CONSTRAINT "fk_order_dispute_reviewed_by" 
+  FOREIGN KEY ("reviewed_by_profile_id") REFERENCES "profile" ("id");
+
+ALTER TABLE "deposit_claim" ADD CONSTRAINT "fk_deposit_claim_dispute" 
+  FOREIGN KEY ("order_dispute_id") REFERENCES "order_dispute" ("id");
+
+ALTER TABLE "deposit_claim" ADD CONSTRAINT "fk_deposit_claim_deposit" 
   FOREIGN KEY ("order_deposit_id") REFERENCES "order_deposit" ("id");
 
-ALTER TABLE "order_deposit_action" ADD CONSTRAINT "fk_order_deposit_action_initiated_by" 
-  FOREIGN KEY ("initiated_by_profile_id") REFERENCES "profile" ("id");
-
-ALTER TABLE "order_deposit_action" ADD CONSTRAINT "fk_order_deposit_action_approved_by" 
+ALTER TABLE "deposit_claim" ADD CONSTRAINT "fk_deposit_claim_approved_by" 
   FOREIGN KEY ("approved_by_profile_id") REFERENCES "profile" ("id");
 
 ALTER TABLE "order_operator_assignment" ADD CONSTRAINT "fk_order_operator_assignment_order" 
@@ -529,33 +592,39 @@ ALTER TABLE "order_deposit" ADD CONSTRAINT "uq_order_deposit_order_id"
 ALTER TABLE "order_deposit" ADD CONSTRAINT "uq_order_deposit_payment_id" 
   UNIQUE ("order_payment_id");
 
-ALTER TABLE "order_dispute" ADD CONSTRAINT "uq_order_dispute_order_id" 
-  UNIQUE ("order_id");
-
--- Track item unit usage at the end of each order
-CREATE TABLE "order_unit_usage" (
+-- Track item unit usage metrics at handover and return
+CREATE TABLE "order_unit_metric_reading" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "order_id" UUID NOT NULL,
   "item_unit_id" UUID NOT NULL,
-  "operating_hours" DECIMAL(10,2),
-  "distance_traveled" DECIMAL(10,2),
-  "fuel_level" DECIMAL(5,2),
-  "notes" TEXT,
+  "metric_id" UUID NOT NULL, -- Reference to organization_usage_metric (constraint in cross-module FK file)
+  "reading_type" VARCHAR(10) NOT NULL, -- 'start' or 'end' for stock metrics, 'value' for flow metrics
+  "value" DECIMAL(15,3) NOT NULL,
   "reported_by_profile_id" UUID,
-  "reported_at" TIMESTAMP DEFAULT now()
+  "reported_at" TIMESTAMP DEFAULT now(),
+  "notes" TEXT
 );
 
--- Add foreign key constraints for order_unit_usage
-ALTER TABLE "order_unit_usage" ADD CONSTRAINT "fk_order_unit_usage_order" 
+-- Add foreign key constraints for order_unit_metric_reading
+ALTER TABLE "order_unit_metric_reading" ADD CONSTRAINT "fk_order_unit_metric_reading_order" 
   FOREIGN KEY ("order_id") REFERENCES "order" ("id");
 
-ALTER TABLE "order_unit_usage" ADD CONSTRAINT "fk_order_unit_usage_item_unit" 
+ALTER TABLE "order_unit_metric_reading" ADD CONSTRAINT "fk_order_unit_metric_reading_item_unit" 
   FOREIGN KEY ("item_unit_id") REFERENCES "item_unit" ("id");
 
-ALTER TABLE "order_unit_usage" ADD CONSTRAINT "fk_order_unit_usage_profile" 
+ALTER TABLE "order_unit_metric_reading" ADD CONSTRAINT "fk_order_unit_metric_reading_metric" 
+  FOREIGN KEY ("metric_id") REFERENCES "organization_usage_metric" ("id");
+
+ALTER TABLE "order_unit_metric_reading" ADD CONSTRAINT "fk_order_unit_metric_reading_profile" 
   FOREIGN KEY ("reported_by_profile_id") REFERENCES "profile" ("id");
 
--- Create indexes for order_unit_usage
-CREATE INDEX "idx_order_unit_usage_order" ON "order_unit_usage" ("order_id");
-CREATE INDEX "idx_order_unit_usage_item_unit" ON "order_unit_usage" ("item_unit_id");
-CREATE INDEX "idx_order_unit_usage_reported_by" ON "order_unit_usage" ("reported_by_profile_id");
+-- Create indexes for order_unit_metric_reading
+CREATE INDEX "idx_order_unit_metric_reading_order" ON "order_unit_metric_reading" ("order_id");
+CREATE INDEX "idx_order_unit_metric_reading_item_unit" ON "order_unit_metric_reading" ("item_unit_id");
+CREATE INDEX "idx_order_unit_metric_reading_metric" ON "order_unit_metric_reading" ("metric_id");
+CREATE INDEX "idx_order_unit_metric_reading_reported_by" ON "order_unit_metric_reading" ("reported_by_profile_id");
+CREATE INDEX "idx_order_unit_metric_reading_type" ON "order_unit_metric_reading" ("reading_type");
+
+-- Document management foreign key constraints
+ALTER TABLE "order_document" ADD CONSTRAINT "fk_order_document_order" 
+  FOREIGN KEY ("order_id") REFERENCES "order" ("id");
