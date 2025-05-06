@@ -124,6 +124,20 @@
 --   "created_at" TIMESTAMP DEFAULT now()
 -- );
 
+
+-- CREATE TABLE "item_addon" (
+--   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   "item_id" UUID NOT NULL,
+--   "name" VARCHAR(100) NOT NULL,
+--   "description" TEXT,
+--   "price" DECIMAL(10,2) NOT NULL,
+--   "is_required" BOOLEAN DEFAULT FALSE,
+--   "created_at" TIMESTAMP DEFAULT now(),
+--   "updated_at" TIMESTAMP DEFAULT now()
+-- );
+
+
+
 --FROM HERE
 
 
@@ -373,6 +387,9 @@ CREATE TABLE "order_item_unit" (
   "item_unit_id" UUID NOT NULL,
   "custom_price" DECIMAL(10,2), 
   "rate_unit" rate_unit, 
+  "tax_id" UUID, 
+  "tax_rate" DECIMAL(5,2), 
+  "tax_included_in_price" BOOLEAN DEFAULT FALSE, 
   "assigned_at" TIMESTAMP DEFAULT now()
 );
 
@@ -491,6 +508,9 @@ ALTER TABLE "order_item_unit" ADD CONSTRAINT "fk_order_item_unit_order"
 ALTER TABLE "order_item_unit" ADD CONSTRAINT "fk_order_item_unit_item_unit" 
   FOREIGN KEY ("item_unit_id") REFERENCES "item_unit" ("id");
 
+ALTER TABLE "order_item_unit" ADD CONSTRAINT "fk_order_item_unit_tax" 
+  FOREIGN KEY ("tax_id") REFERENCES "tax" ("id");
+
 ALTER TABLE "order_item_unit_addon" ADD CONSTRAINT "fk_order_item_unit_addon_order_item_unit" 
   FOREIGN KEY ("order_item_unit_id") REFERENCES "order_item_unit" ("id");
 
@@ -509,3 +529,31 @@ ALTER TABLE "order_deposit" ADD CONSTRAINT "uq_order_deposit_payment_id"
 
 ALTER TABLE "order_dispute" ADD CONSTRAINT "uq_order_dispute_order_id" 
   UNIQUE ("order_id");
+
+-- Track item unit usage at the end of each order
+CREATE TABLE "order_unit_usage" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "order_id" UUID NOT NULL,
+  "item_unit_id" UUID NOT NULL,
+  "operating_hours" DECIMAL(10,2),
+  "distance_traveled" DECIMAL(10,2),
+  "fuel_level" DECIMAL(5,2),
+  "notes" TEXT,
+  "reported_by_profile_id" UUID,
+  "reported_at" TIMESTAMP DEFAULT now()
+);
+
+-- Add foreign key constraints for order_unit_usage
+ALTER TABLE "order_unit_usage" ADD CONSTRAINT "fk_order_unit_usage_order" 
+  FOREIGN KEY ("order_id") REFERENCES "order" ("id");
+
+ALTER TABLE "order_unit_usage" ADD CONSTRAINT "fk_order_unit_usage_item_unit" 
+  FOREIGN KEY ("item_unit_id") REFERENCES "item_unit" ("id");
+
+ALTER TABLE "order_unit_usage" ADD CONSTRAINT "fk_order_unit_usage_profile" 
+  FOREIGN KEY ("reported_by_profile_id") REFERENCES "profile" ("id");
+
+-- Create indexes for order_unit_usage
+CREATE INDEX "idx_order_unit_usage_order" ON "order_unit_usage" ("order_id");
+CREATE INDEX "idx_order_unit_usage_item_unit" ON "order_unit_usage" ("item_unit_id");
+CREATE INDEX "idx_order_unit_usage_reported_by" ON "order_unit_usage" ("reported_by_profile_id");

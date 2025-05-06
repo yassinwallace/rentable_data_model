@@ -25,6 +25,14 @@
 --   'Other'
 -- );
 
+
+-- CREATE TABLE "currency" (
+--   "code" CHAR(3) PRIMARY KEY, -- ISO 4217, e.g., 'EUR'
+--   "name" VARCHAR(50) NOT NULL,
+--   "symbol" VARCHAR(10),
+--   "is_active" BOOLEAN DEFAULT TRUE
+-- );
+
 -- FROM HERE
 
 
