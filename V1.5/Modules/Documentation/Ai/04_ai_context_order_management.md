@@ -17,12 +17,17 @@ The Order Management module (03) handles all aspects of rental transactions in t
 - Tracks rental period with `start_time` and `end_time`
 - Has status tracking via `order_status` enum
 - Includes pricing information: `total_price`, `total_tax_amount`, `currency_code`
+- Specifies payment method via `payment_method` enum (authoritative)
+- Optionally stores preferred payment method via `preferred_payment_method` (intent)
 
 **Business Rules**:
 - Orders represent the contractual agreement for equipment rental
 - Order status progresses through a defined lifecycle (pending → confirmed → in_progress → completed)
 - Orders can also be cancelled or disputed
 - Tax information is copied from item_tax_assignment to the order for historical consistency
+- Payment method affects invoicing and payout behavior, especially for cash payments
+- Preferred payment method tracks the renter's intent during checkout (useful for UX)
+- Actual payment method is the authoritative record of how payment was processed
 
 ### 2. Order Item Unit
 
@@ -173,16 +178,22 @@ This structured approach enables clean workflows, transparent history, and clear
 
 **Entity**: `invoice`
 - Links to an order via `order_id`
-- Classified by `invoice_type` (rental, platform_fee)
+- Classified by `invoice_type` (rental, platform_fee, service_fee)
 - Records issuer and recipient profiles
 - Includes financial details: total amount, tax amount, currency
+- Specifies the actual payment method used via `payment_method` enum
 - Has status tracking via `invoice_status` enum
 - Tracks important dates: issue date, due date, paid date
 
 **Business Rules**:
-- Two types of invoices are generated for each order:
-  - **Rental Invoice**: Issued by the platform on behalf of the owner to the renter
-  - **Platform Fee Invoice**: Issued by the platform to the owner
+- Different invoice types are generated based on the invoice's payment method:
+  - **For Online Payments (card, wallet, bank_transfer)**:
+    - **Rental Invoice**: Issued by the platform on behalf of the owner to the renter
+    - **Platform Fee Invoice**: Issued by the platform to the owner
+  - **For Cash Payments (cash_on_delivery)**:
+    - **Platform Fee Invoice**: Issued by the platform to the renter for platform fees only
+    - No rental invoice is generated as payment is handled offline by the owner
+- The payment method on the invoice is the authoritative record of how payment was processed
 - Rental invoices include the total rental price (with platform fee bundled)
 - Platform fee invoices show only the commission charged by the platform
 - Each invoice has a unique invoice number for legal and accounting purposes
@@ -234,16 +245,20 @@ This structured approach enables clean workflows, transparent history, and clear
 **Business Rules**:
 - Payouts represent the financial settlement between platform and owner
 - Gross amount equals the sum of net amount and fee amount (enforced by constraint)
-- Each order has exactly one payout record
+- Each order has exactly one payout record, except for cash payment orders
+- For cash payment orders (`payment_method` = 'cash_on_delivery'):
+  - No payout record is created since the platform holds no rental funds
+  - The rental payment is handled offline directly between renter and owner
+  - Only the platform service fee is processed through the platform
 - Payout status tracks the payment lifecycle to the owner
 
 **Relationship Structure**:
 - Order → Invoices: One-to-many (an order has multiple invoices of different types)
 - Invoice → Line Items: One-to-many (an invoice contains multiple line items)
 - Organization → Fee Config: One-to-many (an organization can have multiple fee configurations over time)
-- Order → Payout: One-to-one (each order has exactly one payout record)
+- Order → Payout: One-to-one for online payments, none for cash payments
 
-This structured approach enables comprehensive financial tracking, clear fee transparency, and proper accounting for both the platform and equipment owners.
+This structured approach enables comprehensive financial tracking, clear fee transparency, and proper accounting for both the platform and equipment owners, while supporting both online and offline payment scenarios.
 
 ## [CONTEXT] Relationships with Other Modules
 

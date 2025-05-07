@@ -54,10 +54,19 @@ All logistics, usage tracking, handovers, and availability apply specifically to
 
 ### Billing and Financial Management
 - Dual-invoice system separates customer billing from platform fee tracking
+- Multiple payment methods supported (card, wallet, bank_transfer, cash_on_delivery)
+- Payment method tracking at both order and invoice level:
+  - Order tracks both actual and preferred payment methods
+  - Invoice records the authoritative payment method used
+- Different invoice flows based on payment method:
+  - Online payments: Platform processes full payment and pays out to owner
+  - Cash payments: Platform only processes platform fee, rental payment handled offline
 - Rental invoices show the full amount to renters (with platform fee bundled)
-- Platform fee invoices show only the commission charged to owners
+- Platform fee invoices show either:
+  - Commission charged to owners (for online payments)
+  - Reservation fee charged to renters (for cash payments)
 - Flexible fee structures support percentage-based, flat, and tiered calculations
-- Complete payout reconciliation tracks gross amounts, fees, and net payouts
+- Complete payout reconciliation for online payments (none for cash payments)
 - Line items provide detailed breakdown of all charges
 
 ### Availability Management

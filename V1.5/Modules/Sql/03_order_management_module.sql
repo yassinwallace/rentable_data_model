@@ -269,13 +269,21 @@ CREATE TYPE invoice_status AS ENUM (
 
 CREATE TYPE invoice_type AS ENUM (
   'rental',      -- Invoice to renter for the rental (visible to renter)
-  'platform_fee' -- Invoice to owner for platform fees (internal)
+  'platform_fee', -- Invoice to owner for platform fees (internal)
+  'service_fee'  -- Invoice to renter for platform service fee only (for cash payments)
 );
 
 CREATE TYPE fee_calculation_type AS ENUM (
   'percentage',  -- Fee calculated as percentage of order value
   'flat',        -- Flat fee regardless of order value
   'tiered'       -- Fee based on tiered structure
+);
+
+CREATE TYPE payment_method AS ENUM (
+  'card',             -- Default (Stripe card payment)
+  'wallet',           -- Stripe Wallets (Apple Pay, Google Pay)
+  'bank_transfer',    -- Stripe-supported bank payments
+  'cash_on_delivery'  -- Offline cash payment (special logic)
 );
 
 -- Create Tables
@@ -290,6 +298,8 @@ CREATE TABLE "order" (
   "total_price" NUMERIC(10, 2),
   "total_tax_amount" NUMERIC(10, 2),
   "currency_code" CHAR(3) REFERENCES "currency"("code"),
+  "payment_method" payment_method DEFAULT 'card',
+  "preferred_payment_method" payment_method,
   "note" TEXT,
   "created_at" TIMESTAMP DEFAULT now(),
   "updated_at" TIMESTAMP DEFAULT now()
@@ -486,6 +496,7 @@ CREATE TABLE "invoice" (
   "total_amount" NUMERIC(10, 2) NOT NULL,
   "tax_amount" NUMERIC(10, 2) DEFAULT 0,
   "currency_code" CHAR(3) NOT NULL,
+  "payment_method" payment_method NOT NULL,
   "status" invoice_status DEFAULT 'draft',
   "issue_date" DATE,
   "due_date" DATE,
