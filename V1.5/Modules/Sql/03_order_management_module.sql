@@ -286,6 +286,28 @@ CREATE TYPE payment_method AS ENUM (
   'cash_on_delivery'  -- Offline cash payment (special logic)
 );
 
+CREATE TYPE payout_status AS ENUM (
+  'pending',     -- Payout created but not yet processed
+  'processing',  -- Payout is being processed by financial provider
+  'paid',        -- Payout successfully completed
+  'failed'       -- Payout failed to process
+);
+
+CREATE TYPE payout_method AS ENUM (
+  'stripe_transfer',  -- Transfer via Stripe Connect
+  'manual',           -- Manually processed by admin
+  'bank_transfer',    -- Direct bank transfer
+  'wallet_transfer'   -- Transfer to digital wallet
+);
+
+CREATE TYPE account_type AS ENUM (
+  'iban',             -- International Bank Account Number
+  'wallet',           -- Digital wallet
+  'stripe_account',   -- Stripe Connected Account
+  'local_bank',       -- Local bank account
+  'other'             -- Other account type
+);
+
 -- Create Tables
 CREATE TABLE "order" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -553,12 +575,19 @@ CREATE TABLE "order_payout" (
   "gross_amount" NUMERIC(10, 2) NOT NULL, -- Total amount paid by renter
   "fee_amount" NUMERIC(10, 2) NOT NULL, -- Platform fee deducted
   "net_amount" NUMERIC(10, 2) NOT NULL, -- Amount paid to owner
-  "status" payment_status DEFAULT 'PENDING',
-  "payout_date" TIMESTAMP,
-  "external_reference" VARCHAR(100),
-  "notes" TEXT,
+  "status" payout_status DEFAULT 'pending',
+  "payout_method" payout_method NOT NULL,
+  "financial_provider_name" VARCHAR(50), -- e.g., "Stripe", "Wise"
+  "destination_account_type" account_type NOT NULL,
+  "destination_account_id" VARCHAR(100) NOT NULL, -- Masked or hashed account identifier
+  "currency_code" CHAR(3) NOT NULL,
   "created_at" TIMESTAMP DEFAULT now(),
   "updated_at" TIMESTAMP DEFAULT now(),
+  "processing_started_at" TIMESTAMP,
+  "paid_at" TIMESTAMP,
+  "payment_reference" VARCHAR(100), -- Reference ID from payment provider
+  "failure_reason" TEXT, -- Reason for failure if status = 'failed'
+  "notes" TEXT, -- Optional internal notes
   CONSTRAINT "order_payout_amounts_valid" CHECK (
     gross_amount >= 0 AND 
     fee_amount >= 0 AND 
@@ -737,6 +766,35 @@ ALTER TABLE "invoice" ADD CONSTRAINT "uq_invoice_number"
 
 ALTER TABLE "order_payout" ADD CONSTRAINT "uq_order_payout_order_id" 
   UNIQUE ("order_id");
+
+-- Payout trigger function to ensure payouts are only created under specified conditions
+CREATE OR REPLACE FUNCTION check_payout_eligibility()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Check if order is completed
+  IF (SELECT status FROM "order" WHERE id = NEW.order_id) != 'completed' THEN
+    RAISE EXCEPTION 'Cannot create payout for order that is not completed';
+  END IF;
+  
+  -- Check if rental invoice is paid
+  IF (SELECT status FROM "invoice" WHERE id = NEW.rental_invoice_id) != 'paid' THEN
+    RAISE EXCEPTION 'Cannot create payout for order with unpaid rental invoice';
+  END IF;
+  
+  -- Check if payment method is not cash_on_delivery
+  IF (SELECT payment_method FROM "order" WHERE id = NEW.order_id) = 'cash_on_delivery' THEN
+    RAISE EXCEPTION 'Cannot create payout for cash_on_delivery orders';
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to enforce payout eligibility rules
+CREATE TRIGGER check_payout_eligibility_trigger
+BEFORE INSERT ON "order_payout"
+FOR EACH ROW
+EXECUTE FUNCTION check_payout_eligibility();
 
 -- Track item unit usage metrics at handover and return
 CREATE TABLE "order_unit_metric_reading" (

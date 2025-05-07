@@ -240,17 +240,27 @@ This structured approach enables clean workflows, transparent history, and clear
 - Links to the owner profile via `owner_profile_id`
 - References both rental and platform fee invoices
 - Tracks gross amount, fee amount, and net amount
-- Includes payment status and external references
+- Includes comprehensive status tracking and financial metadata:
+  - Status via `payout_status` enum (pending, processing, paid, failed)
+  - Payout method via `payout_method` enum (stripe_transfer, manual, bank_transfer, etc.)
+  - Financial provider details (name, account type, masked account ID)
+  - Timestamps for creation, processing, and payment
+  - Payment references and failure reasons
 
 **Business Rules**:
 - Payouts represent the financial settlement between platform and owner
+- Payouts are only created when specific conditions are met (enforced by database trigger):
+  - The related order must be marked as completed
+  - The rental invoice must be marked as paid
+  - The payment method cannot be cash_on_delivery
 - Gross amount equals the sum of net amount and fee amount (enforced by constraint)
-- Each order has exactly one payout record, except for cash payment orders
+- Each eligible order has exactly one payout record (per-order payout model)
 - For cash payment orders (`payment_method` = 'cash_on_delivery'):
   - No payout record is created since the platform holds no rental funds
   - The rental payment is handled offline directly between renter and owner
-  - Only the platform service fee is processed through the platform
-- Payout status tracks the payment lifecycle to the owner
+  - Only the platform fee is processed through the platform
+- Payout status progresses through a defined lifecycle (pending → processing → paid)
+- Detailed financial tracking supports audit requirements and reconciliation
 
 **Relationship Structure**:
 - Order → Invoices: One-to-many (an order has multiple invoices of different types)
